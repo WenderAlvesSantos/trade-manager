@@ -8,7 +8,7 @@ export function Navbar() {
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
         <div className="flex items-center gap-2 font-semibold">
           <CandlestickChart className="size-5 text-primary" />
-          Megan ASG - Trade Manager
+          Megan - Trade Manager
         </div>
         <form action={logoutAction}>
           <Button type="submit" variant="outline" size="sm">

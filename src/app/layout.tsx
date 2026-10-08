@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Megan ASG - Trade Manager",
+  title: "Megan - Trade Manager",
   description: "Diário de trades para Day Trade de WIN e WDO na B3.",
 };
 

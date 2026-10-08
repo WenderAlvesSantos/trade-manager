@@ -13,7 +13,9 @@ const percentFormatter = new Intl.NumberFormat("pt-BR", {
 export const formatCurrency = (value: number) => currencyFormatter.format(value);
 
 // Datas de trade são salvas como @db.Date (meia-noite UTC), então formatamos em UTC.
-export const formatDate = (value: Date) => dateFormatter.format(value);
+// Aceita também a chave de dia "YYYY-MM-DD", que o construtor de Date interpreta como UTC.
+export const formatDate = (value: Date | string) =>
+  dateFormatter.format(new Date(value));
 
 export const formatPercent = (value: number) => percentFormatter.format(value);
 

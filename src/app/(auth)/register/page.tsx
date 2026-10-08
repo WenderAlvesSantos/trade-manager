@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { AuthForm } from "@/components/auth/auth-form";
 
-export const metadata: Metadata = { title: "Cadastro | Megan ASG" };
+export const metadata: Metadata = { title: "Cadastro | Megan" };
 
 export default function RegisterPage() {
   return <AuthForm mode="register" />;

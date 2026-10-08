@@ -12,6 +12,11 @@ enum Asset {
   WDO
 }
 
+enum AccountType {
+  SIMULADOR
+  REAL
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -24,15 +29,15 @@ model Trade {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date        DateTime @db.Date
+  date        DateTime    @db.Date
+  accountType AccountType
   asset       Asset
   contracts   Int
   points      Float
   grossResult Float
   fees        Float
-  taxes       Float
-  netResult   Float
-  createdAt   DateTime @default(now())
+  createdAt   DateTime    @default(now())
 
   @@index([userId, date])
+  @@index([userId, accountType, date])
 }

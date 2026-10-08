@@ -5,12 +5,13 @@ export const POINT_VALUE: Record<Asset, number> = {
   WDO: 10,
 };
 
-// Taxas B3 estimadas por contrato (ida e volta), corretagem zero na Genial.
+// Custo B3 estimado por contrato (ida e volta), corretagem zero na Genial.
 export const FEE_PER_CONTRACT: Record<Asset, number> = {
-  WIN: 0.5,
-  WDO: 2.5,
+  WIN: 0.48,
+  WDO: 2.4,
 };
 
+// IRRF "dedo-duro" de day trade: 1% sobre o lucro operacional do DIA, nunca por trade.
 export const IRRF_RATE = 0.01;
 
 export type TradeInput = {
@@ -19,26 +20,15 @@ export type TradeInput = {
   points: number;
 };
 
-export type TradeResult = {
-  grossResult: number;
-  fees: number;
-  taxes: number;
-  netResult: number;
-};
+export const roundToCents = (value: number) => Math.round(value * 100) / 100;
 
-const roundToCents = (value: number) => Math.round(value * 100) / 100;
+export function calculateTradeResult({ asset, contracts, points }: TradeInput) {
+  return {
+    grossResult: roundToCents(points * contracts * POINT_VALUE[asset]),
+    fees: roundToCents(contracts * FEE_PER_CONTRACT[asset]),
+  };
+}
 
-export function calculateTradeResult({
-  asset,
-  contracts,
-  points,
-}: TradeInput): TradeResult {
-  const grossResult = roundToCents(points * contracts * POINT_VALUE[asset]);
-  const fees = roundToCents(contracts * FEE_PER_CONTRACT[asset]);
-  const resultAfterFees = grossResult - fees;
-  const taxes =
-    resultAfterFees > 0 ? roundToCents(resultAfterFees * IRRF_RATE) : 0;
-  const netResult = roundToCents(grossResult - fees - taxes);
-
-  return { grossResult, fees, taxes, netResult };
+export function calculateDailyIrrf(operatingProfit: number) {
+  return operatingProfit > 0 ? roundToCents(operatingProfit * IRRF_RATE) : 0;
 }

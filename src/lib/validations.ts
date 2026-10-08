@@ -14,6 +14,7 @@ export const registerSchema = credentialsSchema
 
 export const tradeSchema = z.object({
   date: z.iso.date("Informe uma data válida."),
+  accountType: z.enum(["SIMULADOR", "REAL"], "Selecione o tipo de conta."),
   asset: z.enum(["WIN", "WDO"], "Selecione WIN ou WDO."),
   contracts: z.coerce
     .number()
