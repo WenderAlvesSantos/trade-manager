@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "RiskSettings" ADD COLUMN "drawdownLimit" DOUBLE PRECISION NOT NULL DEFAULT 20;

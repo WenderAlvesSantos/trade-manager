@@ -1,3 +1,4 @@
+import { todayInSaoPaulo } from "@/lib/b3-calendar";
 import { requireUserId } from "@/lib/session";
 import { buildDaySummaries, type DaySummary } from "@/lib/trade-aggregations";
 import { parsePage, parseTradeFilters } from "@/lib/trade-filters";
@@ -7,9 +8,6 @@ export type TradeSearchParams = Promise<Record<string, string | string[] | undef
 
 export const DAYS_PER_PAGE = 20;
 
-const todayInSaoPaulo = () =>
-  new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-
 // Dados comuns às telas de Dashboard e Trades. Lê sessão e searchParams: usar dentro de <Suspense>.
 export async function loadTradePageData(searchParams: TradeSearchParams) {
   const [userId, params] = await Promise.all([requireUserId(), searchParams]);
@@ -17,6 +15,7 @@ export async function loadTradePageData(searchParams: TradeSearchParams) {
   const days = buildDaySummaries(await getDailyAssetTotals(userId, filters));
 
   return {
+    userId,
     filters,
     page: parsePage(params),
     days,

@@ -16,6 +16,5 @@ export async function GET(request: Request) {
   const day = daySchema.safeParse(params.dia);
   if (!day.success) return Response.json({ error: "Parâmetro 'dia' inválido." }, { status: 400 });
 
-  const { account } = parseTradeFilters(params);
-  return Response.json(await getDayTrades(userId, day.data, account));
+  return Response.json(await getDayTrades(userId, day.data, parseTradeFilters(params)));
 }

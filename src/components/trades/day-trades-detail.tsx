@@ -1,7 +1,7 @@
 "use client";
 
 import { Alert, Table, Tag, type TableColumnsType } from "antd";
-import type { AccountType } from "@/generated/prisma/enums";
+import type { AccountType, Asset } from "@/generated/prisma/enums";
 import { formatCurrency } from "@/lib/format";
 import { COLORS, resultHex } from "@/lib/theme";
 import { roundToCents } from "@/lib/trade-calculations";
@@ -39,8 +39,8 @@ const COLUMNS: TableColumnsType<DayTrade> = [
   { key: "actions", align: "center", width: 56, render: (_, trade) => <DeleteTradeButton tradeId={trade.id} /> },
 ];
 
-export function DayTradesDetail({ day, account }: { day: string; account?: AccountType }) {
-  const state = useDayTrades(day, account);
+export function DayTradesDetail({ day, account, asset }: { day: string; account?: AccountType; asset?: Asset }) {
+  const state = useDayTrades(day, account, asset);
 
   return (
     <div

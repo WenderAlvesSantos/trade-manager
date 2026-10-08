@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/session";
+import { pushNewAlerts } from "@/lib/alert-push";
 import { calculateTradeResult } from "@/lib/trade-calculations";
 import {
   firstIssueMessage,
@@ -47,6 +49,7 @@ export async function createTradesAction(rows: TradeRowInput[]): Promise<FormSta
     data: parsed.data.map((trade) => ({ ...toTradeData(trade), userId })),
   });
   revalidatePath("/", "layout");
+  after(() => pushNewAlerts(userId));
   return { success: `${count} trade(s) registrado(s) com sucesso.` };
 }
 
@@ -66,6 +69,7 @@ export async function updateTradeAction(
   if (count === 0) return { error: "Trade não encontrado." };
 
   revalidatePath("/", "layout");
+  after(() => pushNewAlerts(userId));
   return { success: "Trade atualizado com sucesso." };
 }
 

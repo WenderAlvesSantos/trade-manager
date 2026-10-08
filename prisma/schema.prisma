@@ -18,17 +18,28 @@ enum AccountType {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  trades    Trade[]
+  id                String                @id @default(cuid())
+  email             String                @unique
+  password          String
+  createdAt         DateTime              @default(now())
+  trades            Trade[]
+  riskSettings      RiskSettings[]
+  levelChanges      ContractLevelChange[]
+  pushSubscriptions PushSubscription[]
+  notificationsSent NotificationSent[]
+  riskRuleVersions  RiskRuleVersion[]
+}
+
+enum LevelChangeReason {
+  SUBIDA
+  REBAIXAMENTO
+  MANUAL
 }
 
 model Trade {
-  id          String   @id @default(cuid())
+  id          String      @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   date        DateTime    @db.Date
   accountType AccountType
   asset       Asset
@@ -40,4 +51,93 @@ model Trade {
 
   @@index([userId, date])
   @@index([userId, accountType, date])
+}
+
+// Gerenciamento de risco por conta e ativo. Pontos sempre positivos; o sinal vem do contexto (meta/stop).
+model RiskSettings {
+  id                 String      @id @default(cuid())
+  userId             String
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountType        AccountType
+  asset              Asset
+  active             Boolean     @default(true) // ativo operado nesta conta
+  contracts          Int // contratos operados hoje
+  dailyGainTarget    Int // meta global do robô (pts)
+  dailyStopLimit     Int // stop global do robô (pts)
+  tradeTarget        Int // alvo por trade (pts)
+  tradeStop          Int // stop por trade (pts)
+  projectedGainDay   Float // resultado projetado de um dia de meta (pts)
+  projectedLossDay   Float // resultado projetado de um dia de stop (pts)
+  avgTradesPerDay    Int // usado para estimar taxas B3
+  deviationTolerance Int         @default(50) // pts além da meta/stop do robô para alertar desvio
+  initialBankroll    Float       @default(0) // banca do ativo na data de início (R$)
+  bankrollStartDate  DateTime    @db.Date // a banca atual soma o líquido real desde esta data
+  marginPerContract  Float       @default(0) // margem exigida por contrato (R$); 0 = sem teto
+  riskPercent        Float       @default(10) // % máximo da banca perdido num dia de stop
+  drawdownLimit      Float       @default(20) // % de queda desde o pico que ativa a proteção; 0 = desligado
+  maxContracts       Int         @default(0) // teto de contratos que deseja operar; 0 = sem limite
+  levelStartDate     DateTime    @db.Date
+  updatedAt          DateTime    @updatedAt
+
+  @@unique([userId, accountType, asset])
+}
+
+// Histórico de mudanças de contratos (sugestão da banca ou ajuste manual na configuração).
+model ContractLevelChange {
+  id                 String            @id @default(cuid())
+  userId             String
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountType        AccountType
+  asset              Asset
+  date               DateTime          @db.Date
+  fromContracts      Int
+  toContracts        Int
+  reason             LevelChangeReason
+  netSinceLevelStart Float // líquido acumulado no nível que terminou
+  createdAt          DateTime          @default(now())
+
+  @@index([userId, accountType, asset, createdAt])
+}
+
+// Navegadores/aparelhos inscritos no Web Push de um usuário.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Garante um único push por aviso (ex.: "stop:REAL:WIN:2026-10-08", "bankroll:REAL:WIN:1:2").
+model NotificationSent {
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key    String
+  sentAt DateTime @default(now())
+
+  @@id([userId, key])
+}
+
+// Regras usadas para avaliar desvios, válidas a partir de `effectiveFrom` (até a próxima versão).
+model RiskRuleVersion {
+  id                 String      @id @default(cuid())
+  userId             String
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountType        AccountType
+  effectiveFrom      DateTime    @db.Date
+  asset              Asset
+  dailyGainTarget    Int
+  dailyStopLimit     Int
+  deviationTolerance Int
+  riskPercent        Float       @default(10)
+  marginPerContract  Float       @default(0)
+  drawdownLimit      Float       @default(20)
+  maxContracts       Int         @default(0)
+  createdAt          DateTime    @default(now())
+
+  @@unique([userId, accountType, asset, effectiveFrom])
 }

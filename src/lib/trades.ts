@@ -14,9 +14,9 @@ const DAY_TRADE_FIELDS = {
 } as const;
 
 // Sempre escopado ao userId da sessão; usa o índice (userId, accountType, date) ou (userId, date).
-export function getDayTrades(userId: string, day: string, account?: AccountType) {
+export function getDayTrades(userId: string, day: string, { account, asset }: Pick<TradeFilters, "account" | "asset"> = {}) {
   return prisma.trade.findMany({
-    where: { userId, date: new Date(day), ...(account && { accountType: account }) },
+    where: { userId, date: new Date(day), ...(account && { accountType: account }), ...(asset && { asset }) },
     select: DAY_TRADE_FIELDS,
     // Lançamentos em lote podem ter o mesmo createdAt; o id (cuid, crescente) desempata na ordem de inserção.
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -39,9 +39,22 @@ export type DailyAssetRow = {
   tradeLoss: number;
 };
 
+// Data mais antiga entre os últimos `days` dias operados da conta no ativo (base da média móvel); null sem histórico.
+export async function oldestOfLatestTradingDays(userId: string, account: AccountType, asset: Asset, days: number) {
+  const rows = await prisma.$queryRaw<{ day: string }[]>`
+    SELECT DISTINCT to_char("date", 'YYYY-MM-DD') AS "day"
+    FROM "Trade"
+    WHERE "userId" = ${userId} AND "accountType" = ${account}::"AccountType" AND "asset" = ${asset}::"Asset"
+    ORDER BY "day" DESC
+    LIMIT ${days}
+  `;
+  return rows.at(-1)?.day ?? null;
+}
+
 // Totais por dia e ativo calculados no banco: o volume retornado cresce com os dias operados, não com os trades.
-export function getDailyAssetTotals(userId: string, { account, from, to }: TradeFilters) {
+export function getDailyAssetTotals(userId: string, { account, from, to, asset }: TradeFilters) {
   const accountFilter = account ? Prisma.sql`AND "accountType" = ${account}::"AccountType"` : Prisma.empty;
+  const assetFilter = asset ? Prisma.sql`AND "asset" = ${asset}::"Asset"` : Prisma.empty;
   const fromFilter = from ? Prisma.sql`AND "date" >= ${from}::date` : Prisma.empty;
   const toFilter = to ? Prisma.sql`AND "date" <= ${to}::date` : Prisma.empty;
 
@@ -58,7 +71,7 @@ export function getDailyAssetTotals(userId: string, { account, from, to }: Trade
       SUM(GREATEST("grossResult" - "fees", 0))::float8 AS "tradeProfit",
       SUM(GREATEST("fees" - "grossResult", 0))::float8 AS "tradeLoss"
     FROM "Trade"
-    WHERE "userId" = ${userId} ${accountFilter} ${fromFilter} ${toFilter}
+    WHERE "userId" = ${userId} ${accountFilter} ${assetFilter} ${fromFilter} ${toFilter}
     GROUP BY "date", "asset"
     ORDER BY "date" DESC, "asset"
   `;

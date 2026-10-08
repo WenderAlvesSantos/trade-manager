@@ -3,12 +3,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { DashboardOutlined, UnorderedListOutlined } from "@ant-design/icons";
+import { DashboardOutlined, SettingOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import { Menu } from "antd";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: <DashboardOutlined /> },
   { href: "/trades", label: "Trades", icon: <UnorderedListOutlined /> },
+  { href: "/configuracoes", label: "Configurações", icon: <SettingOutlined /> },
 ];
 
 type Mode = "inline" | "horizontal";

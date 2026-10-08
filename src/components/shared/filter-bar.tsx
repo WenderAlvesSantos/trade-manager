@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { ClearOutlined } from "@ant-design/icons";
 import { Button, Card, DatePicker, Segmented, Spin } from "antd";
 import dayjs from "dayjs";
-import type { AccountType } from "@/generated/prisma/enums";
+import type { AccountType, Asset } from "@/generated/prisma/enums";
+import { ASSETS } from "@/lib/risk-projection";
 import { ACCOUNT_OPTIONS, filtersToQueryString, type TradeFilters } from "@/lib/trade-filters";
 
 const ALL_ACCOUNTS = "AMBOS";
@@ -15,6 +16,9 @@ const SEGMENT_OPTIONS = [
   ...ACCOUNT_OPTIONS.map(({ value, label }) => ({ value: value as string, label })),
   { value: ALL_ACCOUNTS, label: "Ambos" },
 ];
+
+const ALL_ASSETS = "TODOS";
+const ASSET_OPTIONS = [...ASSETS.map((asset) => ({ value: asset as string, label: asset })), { value: ALL_ASSETS, label: "Todos" }];
 
 export function FilterBar({ initialFilters }: { initialFilters: TradeFilters }) {
   const router = useRouter();
@@ -27,7 +31,7 @@ export function FilterBar({ initialFilters }: { initialFilters: TradeFilters }) 
     startTransition(() => router.replace(`${pathname}${filtersToQueryString(next)}`, { scroll: false }));
   }
 
-  const hasFilters = Boolean(filters.account || filters.from || filters.to);
+  const hasFilters = Boolean(filters.account || filters.asset || filters.from || filters.to);
 
   return (
     <Card size="small">
@@ -38,6 +42,14 @@ export function FilterBar({ initialFilters }: { initialFilters: TradeFilters }) 
           onChange={(value) => {
             const account = value === ALL_ACCOUNTS ? undefined : (value as AccountType);
             applyFilters({ ...filters, account });
+          }}
+        />
+        <Segmented
+          options={ASSET_OPTIONS}
+          value={filters.asset ?? ALL_ASSETS}
+          onChange={(value) => {
+            const asset = value === ALL_ASSETS ? undefined : (value as Asset);
+            applyFilters({ ...filters, asset });
           }}
         />
         <DatePicker.RangePicker
