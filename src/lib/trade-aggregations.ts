@@ -1,89 +1,110 @@
-import type { Trade } from "@/generated/prisma/client";
 import type { Asset } from "@/generated/prisma/enums";
 import { calculateDailyIrrf, roundToCents } from "@/lib/trade-calculations";
+import type { DailyAssetRow } from "@/lib/trades";
+
+// Ganhos = soma dos pontos dos trades positivos; perdas = soma (em módulo) dos negativos.
+export type PointsBreakdown = { gained: number; lost: number };
+
+// Pontos de WIN e WDO têm valores diferentes, então nunca são somados entre si.
+export type PointsByAsset = Partial<Record<Asset, PointsBreakdown>>;
 
 export type DaySummary = {
   day: string;
-  trades: Trade[];
   tradeCount: number;
   wins: number;
   winRate: number;
-  pointsByAsset: Partial<Record<Asset, number>>;
+  pointsByAsset: PointsByAsset;
   grossResult: number;
   fees: number;
   operatingProfit: number;
   irrf: number;
   netResult: number;
+  tradeProfit: number;
+  tradeLoss: number;
 };
 
-export type PointsBreakdown = { gained: number; lost: number };
-
 export type PeriodSummary = {
-  pointsByAsset: Partial<Record<Asset, PointsBreakdown>>;
+  pointsByAsset: PointsByAsset;
   grossResult: number;
   fees: number;
   irrf: number;
   netResult: number;
   winRate: number;
   tradeCount: number;
+  // Ganhos dos trades vencedores / perdas dos perdedores (após taxas B3). null = nenhum trade perdedor.
+  profitFactor: number | null;
 };
 
-const isWinningTrade = (trade: Trade) => trade.grossResult - trade.fees > 0;
-
-const dayKey = (date: Date) => date.toISOString().slice(0, 10);
-
-// Pontos de WIN e WDO têm valores diferentes, então não são somados entre si.
-function sumPointsByAsset(trades: Trade[]) {
-  const totals: Partial<Record<Asset, number>> = {};
-  for (const { asset, points } of trades) {
-    totals[asset] = (totals[asset] ?? 0) + points;
-  }
-  return totals;
+export function calculateProfitFactor(profit: number, loss: number) {
+  return loss > 0 ? profit / loss : null;
 }
 
-// Ganhos = soma dos pontos dos trades positivos; perdas = soma (em módulo) dos negativos.
-function breakdownPointsByAsset(trades: Trade[]) {
-  const totals: Partial<Record<Asset, PointsBreakdown>> = {};
-  for (const { asset, points } of trades) {
-    const current = (totals[asset] ??= { gained: 0, lost: 0 });
-    if (points > 0) current.gained += points;
-    else current.lost += Math.abs(points);
-  }
-  return totals;
+function addPoints(target: PointsByAsset, asset: Asset, { gained, lost }: PointsBreakdown) {
+  const current = (target[asset] ??= { gained: 0, lost: 0 });
+  current.gained += gained;
+  current.lost += lost;
 }
 
-function summarizeDay(day: string, trades: Trade[]): DaySummary {
-  const grossResult = roundToCents(trades.reduce((sum, t) => sum + t.grossResult, 0));
-  const fees = roundToCents(trades.reduce((sum, t) => sum + t.fees, 0));
+function summarizeDay(day: string, rows: DailyAssetRow[]): DaySummary {
+  const pointsByAsset: PointsByAsset = {};
+  let tradeCount = 0;
+  let wins = 0;
+  let gross = 0;
+  let totalFees = 0;
+  let tradeProfit = 0;
+  let tradeLoss = 0;
+
+  for (const row of rows) {
+    addPoints(pointsByAsset, row.asset, { gained: row.pointsGained, lost: row.pointsLost });
+    tradeCount += row.tradeCount;
+    wins += row.wins;
+    gross += row.grossResult;
+    totalFees += row.fees;
+    tradeProfit += row.tradeProfit;
+    tradeLoss += row.tradeLoss;
+  }
+
+  const grossResult = roundToCents(gross);
+  const fees = roundToCents(totalFees);
   const operatingProfit = roundToCents(grossResult - fees);
   const irrf = calculateDailyIrrf(operatingProfit);
-  const wins = trades.filter(isWinningTrade).length;
 
   return {
     day,
-    trades,
-    tradeCount: trades.length,
+    tradeCount,
     wins,
-    winRate: wins / trades.length,
-    pointsByAsset: sumPointsByAsset(trades),
+    winRate: wins / tradeCount,
+    pointsByAsset,
     grossResult,
     fees,
     operatingProfit,
     irrf,
     netResult: roundToCents(operatingProfit - irrf),
+    tradeProfit: roundToCents(tradeProfit),
+    tradeLoss: roundToCents(tradeLoss),
   };
 }
 
-// Espera trades já ordenados por data desc; mantém essa ordem nos grupos.
-export function groupTradesByDay(trades: Trade[]): DaySummary[] {
-  const groups = new Map<string, Trade[]>();
-  for (const trade of trades) {
-    const key = dayKey(trade.date);
-    const dayTrades = groups.get(key);
-    if (dayTrades) dayTrades.push(trade);
-    else groups.set(key, [trade]);
+// Espera linhas ordenadas por dia desc (como vêm do banco) e mantém essa ordem.
+export function buildDaySummaries(rows: DailyAssetRow[]): DaySummary[] {
+  const groups = new Map<string, DailyAssetRow[]>();
+  for (const row of rows) {
+    const dayRows = groups.get(row.day);
+    if (dayRows) dayRows.push(row);
+    else groups.set(row.day, [row]);
   }
-  return Array.from(groups, ([day, dayTrades]) => summarizeDay(day, dayTrades));
+  return Array.from(groups, ([day, dayRows]) => summarizeDay(day, dayRows));
+}
+
+export type EquityPoint = { day: string; net: number; cumulative: number };
+
+// Curva de capital: ordem cronológica, com o líquido do dia e o acumulado até ele.
+export function buildEquityCurve(days: DaySummary[]): EquityPoint[] {
+  let cumulative = 0;
+  return [...days].reverse().map((day) => {
+    cumulative = roundToCents(cumulative + day.netResult);
+    return { day: day.day, net: day.netResult, cumulative };
+  });
 }
 
 export function summarizePeriod(days: DaySummary[]): PeriodSummary {
@@ -92,13 +113,21 @@ export function summarizePeriod(days: DaySummary[]): PeriodSummary {
   const tradeCount = days.reduce((total, day) => total + day.tradeCount, 0);
   const wins = days.reduce((total, day) => total + day.wins, 0);
 
+  const pointsByAsset: PointsByAsset = {};
+  for (const day of days) {
+    for (const [asset, points] of Object.entries(day.pointsByAsset) as [Asset, PointsBreakdown][]) {
+      addPoints(pointsByAsset, asset, points);
+    }
+  }
+
   return {
-    pointsByAsset: breakdownPointsByAsset(days.flatMap((day) => day.trades)),
+    pointsByAsset,
     grossResult: sum((day) => day.grossResult),
     fees: sum((day) => day.fees),
     irrf: sum((day) => day.irrf),
     netResult: sum((day) => day.netResult),
     winRate: tradeCount > 0 ? wins / tradeCount : 0,
     tradeCount,
+    profitFactor: calculateProfitFactor(sum((day) => day.tradeProfit), sum((day) => day.tradeLoss)),
   };
 }

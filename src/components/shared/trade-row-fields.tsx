@@ -1,124 +1,113 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
-import type { TradeRowInput } from "@/actions/trades";
-import { SimpleSelect } from "@/components/simple-select";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import type { Asset } from "@/generated/prisma/enums";
-import { formatCurrency, resultColor } from "@/lib/format";
+import { DeleteOutlined } from "@ant-design/icons";
+import { Button, DatePicker, Form, InputNumber, Select, Typography } from "antd";
+import type { Dayjs } from "dayjs";
+import type { AccountType, Asset } from "@/generated/prisma/enums";
+import { formatCurrency } from "@/lib/format";
 import { calculateTradeResult } from "@/lib/trade-calculations";
 import { ACCOUNT_OPTIONS } from "@/lib/trade-filters";
+import { resultHex } from "@/lib/theme";
 
-export type TradeRow = TradeRowInput & { key: string };
+export type TradeRowValues = {
+  date: Dayjs;
+  accountType: AccountType;
+  asset: Asset;
+  contracts?: number;
+  points?: number;
+};
 
 export const TRADE_ROW_GRID =
-  "grid grid-cols-2 gap-2 sm:grid-cols-[9.5rem_8rem_7rem_6rem_7rem_1fr_2rem] sm:items-center";
+  "grid grid-cols-2 gap-2 sm:grid-cols-[9.5rem_8rem_6.5rem_6.5rem_7rem_1fr_2rem] sm:items-start";
 
 const ASSET_OPTIONS = [
   { value: "WIN", label: "WIN" },
   { value: "WDO", label: "WDO" },
 ];
 
-function previewResult(row: TradeRow) {
-  const contracts = Number(row.contracts);
-  const points = Number(row.points);
-  if (!row.contracts || !row.points || !Number.isInteger(contracts) || contracts < 1 || Number.isNaN(points)) {
-    return null;
+const required = (message: string) => [{ required: true, message }];
+
+function RowPreview({ name }: { name: number }) {
+  const row = Form.useWatch(["trades", name]) as TradeRowValues | undefined;
+  if (!row?.asset || !row.contracts || row.points === undefined || row.points === null) {
+    return <Typography.Text type="secondary">—</Typography.Text>;
   }
-  return calculateTradeResult({ asset: row.asset as Asset, contracts, points });
+  const { grossResult, fees } = calculateTradeResult({
+    asset: row.asset,
+    contracts: row.contracts,
+    points: row.points,
+  });
+  return (
+    <span className="text-xs leading-8">
+      <span style={{ color: resultHex(grossResult) }}>{formatCurrency(grossResult)}</span>
+      <Typography.Text type="secondary" className="text-xs!">
+        {" · taxas "}
+        {formatCurrency(fees)}
+      </Typography.Text>
+    </span>
+  );
 }
 
 export function TradeRowFields({
-  row,
+  name,
   index,
-  autoFocus,
   canRemove,
-  onChange,
   onRemove,
   onEnter,
 }: {
-  row: TradeRow;
+  name: number;
   index: number;
-  autoFocus: boolean;
   canRemove: boolean;
-  onChange: (patch: Partial<TradeRowInput>) => void;
   onRemove: () => void;
   onEnter: () => void;
 }) {
-  const preview = previewResult(row);
-  const label = (field: string) => `${field} da linha ${index + 1}`;
   const handleEnter = (event: React.KeyboardEvent) => {
     if (event.key !== "Enter") return;
     event.preventDefault();
     onEnter();
   };
+  const label = (field: string) => `${field} da linha ${index + 1}`;
+  const item = { noStyle: false, style: { marginBottom: 0 } };
 
   return (
-    <div className={`${TRADE_ROW_GRID} rounded-lg border p-2 sm:border-0 sm:p-0`}>
-      <Input
-        type="date"
-        aria-label={label("Data")}
-        value={row.date}
-        onChange={(e) => onChange({ date: e.target.value })}
-        required
-      />
-      <SimpleSelect
-        ariaLabel={label("Conta")}
-        value={row.accountType}
-        onChange={(accountType) => onChange({ accountType })}
-        options={ACCOUNT_OPTIONS}
-      />
-      <SimpleSelect
-        ariaLabel={label("Ativo")}
-        value={row.asset}
-        onChange={(asset) => onChange({ asset })}
-        options={ASSET_OPTIONS}
-      />
-      <Input
-        type="number"
-        min={1}
-        step={1}
-        placeholder="Contr."
-        aria-label={label("Contratos")}
-        value={row.contracts}
-        onChange={(e) => onChange({ contracts: e.target.value })}
-        onKeyDown={handleEnter}
-        autoFocus={autoFocus}
-        required
-      />
-      <Input
-        type="number"
-        step="any"
-        placeholder="Pontos"
-        aria-label={label("Pontos")}
-        value={row.points}
-        onChange={(e) => onChange({ points: e.target.value })}
-        onKeyDown={handleEnter}
-        required
-      />
-      <span className="text-xs text-muted-foreground">
-        {preview ? (
-          <>
-            <span className={resultColor(preview.grossResult)}>{formatCurrency(preview.grossResult)}</span>
-            {" · taxas "}
-            {formatCurrency(preview.fees)}
-          </>
-        ) : (
-          "—"
-        )}
-      </span>
+    <div className={TRADE_ROW_GRID}>
+      <Form.Item {...item} name={[name, "date"]} rules={required("Informe a data.")}>
+        <DatePicker format="DD/MM/YYYY" aria-label={label("Data")} allowClear={false} className="w-full" />
+      </Form.Item>
+      <Form.Item {...item} name={[name, "accountType"]} rules={required("Selecione a conta.")}>
+        <Select options={ACCOUNT_OPTIONS} aria-label={label("Conta")} />
+      </Form.Item>
+      <Form.Item {...item} name={[name, "asset"]} rules={required("Selecione o ativo.")}>
+        <Select options={ASSET_OPTIONS} aria-label={label("Ativo")} />
+      </Form.Item>
+      <Form.Item {...item} name={[name, "contracts"]} rules={required("Informe os contratos.")}>
+        <InputNumber
+          min={1}
+          precision={0}
+          placeholder="Contr."
+          aria-label={label("Contratos")}
+          onKeyDown={handleEnter}
+          autoFocus={index > 0}
+          className="w-full"
+        />
+      </Form.Item>
+      <Form.Item {...item} name={[name, "points"]} rules={required("Informe os pontos.")}>
+        <InputNumber
+          placeholder="Pontos"
+          aria-label={label("Pontos")}
+          onKeyDown={handleEnter}
+          className="w-full"
+        />
+      </Form.Item>
+      <RowPreview name={name} />
       <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
+        type="text"
+        danger
+        icon={<DeleteOutlined />}
         onClick={onRemove}
         disabled={!canRemove}
         aria-label={`Remover linha ${index + 1}`}
-        className="justify-self-end text-muted-foreground hover:text-red-600"
-      >
-        <Trash2 />
-      </Button>
+      />
     </div>
   );
 }

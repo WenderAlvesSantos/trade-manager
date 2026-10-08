@@ -1,16 +1,15 @@
-import { CandlestickChart } from "lucide-react";
+import { Brand } from "@/components/layout/brand";
 
-export default function AuthLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-6 bg-muted/40 p-6">
-      <div className="flex items-center gap-2 text-lg font-semibold">
-        <CandlestickChart className="size-6 text-primary" />
-        Megan - Trade Manager
-      </div>
+    <main
+      className="flex flex-1 flex-col items-center justify-center gap-8 p-6"
+      style={{
+        background:
+          "radial-gradient(ellipse at top, rgba(59, 130, 246, 0.15), transparent 60%), #0a0d12",
+      }}
+    >
+      <Brand />
       {children}
     </main>
   );

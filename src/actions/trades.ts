@@ -46,7 +46,7 @@ export async function createTradesAction(rows: TradeRowInput[]): Promise<FormSta
   const { count } = await prisma.trade.createMany({
     data: parsed.data.map((trade) => ({ ...toTradeData(trade), userId })),
   });
-  revalidatePath("/");
+  revalidatePath("/", "layout");
   return { success: `${count} trade(s) registrado(s) com sucesso.` };
 }
 
@@ -65,12 +65,12 @@ export async function updateTradeAction(
   });
   if (count === 0) return { error: "Trade não encontrado." };
 
-  revalidatePath("/");
+  revalidatePath("/", "layout");
   return { success: "Trade atualizado com sucesso." };
 }
 
 export async function deleteTradeAction(tradeId: string) {
   const userId = await requireUserId();
   await prisma.trade.deleteMany({ where: { id: tradeId, userId } });
-  revalidatePath("/");
+  revalidatePath("/", "layout");
 }

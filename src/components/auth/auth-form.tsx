@@ -2,20 +2,9 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
-import { Loader2 } from "lucide-react";
+import { LockOutlined, MailOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Input, Typography } from "antd";
 import { loginAction, registerAction } from "@/actions/auth";
-import { FormMessage } from "@/components/form-message";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 const MODES = {
   login: {
@@ -34,19 +23,34 @@ const MODES = {
   },
 } as const;
 
-type Field = { name: string; label: string; type: string; autoComplete: string };
+type Field = { name: string; placeholder: string; type: "email" | "password"; autoComplete: string };
 
 const FIELDS: Record<keyof typeof MODES, Field[]> = {
   login: [
-    { name: "email", label: "E-mail", type: "email", autoComplete: "email" },
-    { name: "password", label: "Senha", type: "password", autoComplete: "current-password" },
+    { name: "email", placeholder: "E-mail", type: "email", autoComplete: "email" },
+    { name: "password", placeholder: "Senha", type: "password", autoComplete: "current-password" },
   ],
   register: [
-    { name: "email", label: "E-mail", type: "email", autoComplete: "email" },
-    { name: "password", label: "Senha", type: "password", autoComplete: "new-password" },
-    { name: "confirmPassword", label: "Confirmar senha", type: "password", autoComplete: "new-password" },
+    { name: "email", placeholder: "E-mail", type: "email", autoComplete: "email" },
+    { name: "password", placeholder: "Senha", type: "password", autoComplete: "new-password" },
+    { name: "confirmPassword", placeholder: "Confirmar senha", type: "password", autoComplete: "new-password" },
   ],
 };
+
+function AuthField({ field }: { field: Field }) {
+  const common = {
+    name: field.name,
+    placeholder: field.placeholder,
+    autoComplete: field.autoComplete,
+    size: "large" as const,
+    required: true,
+  };
+  return field.type === "password" ? (
+    <Input.Password prefix={<LockOutlined />} {...common} />
+  ) : (
+    <Input type="email" prefix={<MailOutlined />} {...common} />
+  );
+}
 
 export function AuthForm({ mode }: { mode: keyof typeof MODES }) {
   const config = MODES[mode];
@@ -54,31 +58,24 @@ export function AuthForm({ mode }: { mode: keyof typeof MODES }) {
 
   return (
     <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle className="text-xl">{config.title}</CardTitle>
-        <CardDescription>{config.description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form action={formAction} className="flex flex-col gap-4">
-          {FIELDS[mode].map((field) => (
-            <div key={field.name} className="flex flex-col gap-2">
-              <Label htmlFor={field.name}>{field.label}</Label>
-              <Input id={field.name} required {...field} />
-            </div>
-          ))}
-          <FormMessage state={state} />
-          <Button type="submit" disabled={isPending} className="w-full">
-            {isPending && <Loader2 className="animate-spin" />}
-            {config.submit}
-          </Button>
-        </form>
-      </CardContent>
-      <CardFooter className="justify-center gap-1 text-muted-foreground">
-        {config.footer.text}
-        <Link href={config.footer.href} className="text-primary underline-offset-4 hover:underline">
-          {config.footer.link}
-        </Link>
-      </CardFooter>
+      <Typography.Title level={3} style={{ marginBottom: 4 }}>
+        {config.title}
+      </Typography.Title>
+      <Typography.Text type="secondary">{config.description}</Typography.Text>
+
+      <form action={formAction} className="mt-6 flex flex-col gap-4">
+        {FIELDS[mode].map((field) => (
+          <AuthField key={field.name} field={field} />
+        ))}
+        {state?.error && <Alert type="error" title={state.error} showIcon />}
+        <Button type="primary" htmlType="submit" size="large" loading={isPending} block>
+          {config.submit}
+        </Button>
+      </form>
+
+      <Typography.Paragraph type="secondary" className="mt-6 mb-0 text-center">
+        {config.footer.text} <Link href={config.footer.href}>{config.footer.link}</Link>
+      </Typography.Paragraph>
     </Card>
   );
 }

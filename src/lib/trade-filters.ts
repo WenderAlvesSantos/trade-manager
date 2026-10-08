@@ -31,11 +31,19 @@ export function parseTradeFilters(searchParams: SearchParams): TradeFilters {
   return { account: conta, from: de, to: ate };
 }
 
-export function filtersToQueryString({ account, from, to }: TradeFilters) {
+// ?pagina=N da listagem de Trades; ausente ou inválido = primeira página.
+const pageSchema = z.object({ pagina: z.coerce.number().int().min(1).catch(1).default(1) });
+
+export function parsePage(searchParams: SearchParams) {
+  return pageSchema.parse(searchParams).pagina;
+}
+
+export function filtersToQueryString({ account, from, to }: TradeFilters, page?: number) {
   const params = new URLSearchParams();
   if (account) params.set("conta", account);
   if (from) params.set("de", from);
   if (to) params.set("ate", to);
+  if (page && page > 1) params.set("pagina", String(page));
   const query = params.toString();
   return query ? `?${query}` : "";
 }

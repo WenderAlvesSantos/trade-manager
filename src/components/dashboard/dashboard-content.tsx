@@ -1,36 +1,30 @@
-import { requireUserId } from "@/lib/session";
-import { groupTradesByDay, summarizePeriod } from "@/lib/trade-aggregations";
-import { filtersToQueryString, parseTradeFilters } from "@/lib/trade-filters";
-import { getUserTrades } from "@/lib/trades";
-import { AddTradesDialog } from "./add-trades-dialog";
-import { DailyTradesTable } from "./daily-trades-table";
-import { FilterBar } from "./filter-bar";
+import { PageHeader } from "@/components/layout/page-header";
+import { AddTradesDialog } from "@/components/shared/add-trades-dialog";
+import { FilterBar } from "@/components/shared/filter-bar";
+import { buildEquityCurve, summarizePeriod } from "@/lib/trade-aggregations";
+import { filtersToQueryString } from "@/lib/trade-filters";
+import { computeRiskMetrics } from "@/lib/trade-metrics";
+import { loadTradePageData, type TradeSearchParams } from "@/lib/trade-page-data";
+import { DailyResultChart } from "./daily-result-chart";
+import { RiskMetricsCards } from "./risk-metrics-cards";
 import { SummaryCards } from "./summary-cards";
 
-const todayInSaoPaulo = () =>
-  new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-
-// Lê sessão e searchParams (dados de request), por isso deve ficar dentro de um <Suspense>.
-export async function DashboardContent({
-  searchParams,
-}: {
-  searchParams: PageProps<"/">["searchParams"];
-}) {
-  const [userId, filters] = await Promise.all([
-    requireUserId(),
-    searchParams.then(parseTradeFilters),
-  ]);
-  const days = groupTradesByDay(await getUserTrades(userId, filters));
+export async function DashboardContent({ searchParams }: { searchParams: TradeSearchParams }) {
+  const { filters, days, today, defaultAccount } = await loadTradePageData(searchParams);
+  const equityCurve = buildEquityCurve(days);
+  const summary = summarizePeriod(days);
 
   return (
     <>
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">Dashboard</h1>
-        <AddTradesDialog today={todayInSaoPaulo()} defaultAccount={filters.account ?? "SIMULADOR"} />
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Visão geral do seu desempenho no período selecionado."
+        action={<AddTradesDialog today={today} defaultAccount={defaultAccount} />}
+      />
       <FilterBar key={filtersToQueryString(filters)} initialFilters={filters} />
-      <SummaryCards summary={summarizePeriod(days)} />
-      <DailyTradesTable days={days} />
+      <SummaryCards summary={summary} />
+      <RiskMetricsCards metrics={computeRiskMetrics(equityCurve)} profitFactor={summary.profitFactor} />
+      <DailyResultChart data={equityCurve} />
     </>
   );
 }

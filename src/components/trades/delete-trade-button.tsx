@@ -1,28 +1,30 @@
 "use client";
 
 import { useTransition } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { DeleteOutlined } from "@ant-design/icons";
+import { App, Button, Popconfirm } from "antd";
 import { deleteTradeAction } from "@/actions/trades";
-import { Button } from "@/components/ui/button";
 
 export function DeleteTradeButton({ tradeId }: { tradeId: string }) {
+  const { message } = App.useApp();
   const [isPending, startTransition] = useTransition();
 
   function handleDelete() {
-    if (!window.confirm("Excluir este trade?")) return;
-    startTransition(() => deleteTradeAction(tradeId));
+    startTransition(async () => {
+      await deleteTradeAction(tradeId);
+      message.success("Trade excluído.");
+    });
   }
 
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      onClick={handleDelete}
-      disabled={isPending}
-      aria-label="Excluir trade"
-      className="text-muted-foreground hover:text-red-600"
+    <Popconfirm
+      title="Excluir este trade?"
+      okText="Excluir"
+      cancelText="Cancelar"
+      okButtonProps={{ danger: true }}
+      onConfirm={handleDelete}
     >
-      {isPending ? <Loader2 className="animate-spin" /> : <Trash2 />}
-    </Button>
+      <Button type="text" danger size="small" icon={<DeleteOutlined />} loading={isPending} aria-label="Excluir trade" />
+    </Popconfirm>
   );
 }
