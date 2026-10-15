@@ -34,7 +34,7 @@ function useProjectedDays(projection: ProjectionInput | null) {
 }
 
 // Paginação no servidor: a página fica na URL (?pagina=N); os trades de um dia só são buscados ao expandir.
-// Pregões projetados ficam no topo da primeira página (mais distante primeiro), fora da contagem da paginação.
+// Ordem crescente de data: os pregões projetados vêm depois dos realizados, na última página, fora da contagem.
 export function DailyTradesTable({ filters, days, projection, balances, deviations, page, pageSize, totalDays }: DailyTradesTableProps) {
   const columns = useMemo(() => buildDailyColumns(deviations), [deviations]);
   const { settings, setSettings, projected } = useProjectedDays(projection);
@@ -46,9 +46,10 @@ export function DailyTradesTable({ filters, days, projection, balances, deviatio
     startTransition(() => router.push(`${pathname}${filtersToQueryString(filters, nextPage)}`, { scroll: false }));
   }
 
+  const lastPage = page >= Math.ceil(totalDays / pageSize);
   const rows: DailyRow[] = [
-    ...(page === 1 ? [...projected].reverse().map((day) => ({ ...day, kind: "projected" as const })) : []),
     ...days.map((day) => ({ ...day, kind: "realized" as const, balance: balances[day.day] })),
+    ...(lastPage ? projected.map((day) => ({ ...day, kind: "projected" as const })) : []),
   ];
 
   return (

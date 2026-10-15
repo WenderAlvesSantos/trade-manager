@@ -24,6 +24,9 @@ export async function loadTradePageData(searchParams: TradeSearchParams) {
   };
 }
 
+// Listagem de Trades: do pregão mais antigo para o mais recente (o banco devolve do mais recente).
+export const chronological = (days: DaySummary[]) => [...days].sort((a, b) => a.day.localeCompare(b.day));
+
 // Os trades de cada dia não vêm aqui: são buscados em /api/trades quando a linha é expandida.
 export function paginateDays(days: DaySummary[], requestedPage: number) {
   const totalPages = Math.max(1, Math.ceil(days.length / DAYS_PER_PAGE));
