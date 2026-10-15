@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { bankrollForContracts, bankrollLevels, bankrollStatus, contractsForBankroll, stopDayCost } from "./bankroll-sizing";
+import { initialDrawdown } from "./bankroll-drawdown";
+import {
+  bankrollForContracts,
+  bankrollLevels,
+  bankrollStatus,
+  bankrollToReach,
+  contractsForBankroll,
+  nextContracts,
+  stopDayCost,
+} from "./bankroll-sizing";
 import { TEST_RISK_CONFIG as config } from "./risk-test-config";
 
 // Dia de stop por contrato: stop global de 250 pts × R$ 0,20 + 3 × R$ 0,48 = R$ 51,44.
@@ -58,7 +67,15 @@ describe("bankrollStatus", () => {
     expect(status.suggestion).toBe("manter");
     expect(status.requiredForNext).toBe(1028.8);
     expect(status.currentStopCost).toBe(51.44);
-    expect(status.stopDaysToRuin).toBe(19);
+    // 4º stop leva a queda a 20%: a proteção zera a recomendação de 1 contrato.
+    expect(status.stopStreak).toEqual({ keepingContracts: 3, untilOut: 4 });
+  });
+
+  it("no limite do risco, 1 stop já obriga a reduzir", () => {
+    const tight = { ...config, contracts: 6, riskPercent: 32, marginPerContract: 155, drawdownLimit: 30, avgTradesPerDay: 4 };
+    const streak = bankrollStatus(tight, 1000).stopStreak;
+    expect(streak.keepingContracts).toBe(0);
+    expect(streak.untilOut).toBeGreaterThan(1);
   });
 
   it("sugere subir quando a banca comporta mais contratos", () => {
@@ -92,6 +109,27 @@ describe("bankrollLevels", () => {
 
   it("para no máximo de contratos configurado", () => {
     expect(bankrollLevels({ ...config, maxContracts: 3 }, 1000)).toHaveLength(3);
+  });
+});
+
+describe("folga para subir", () => {
+  const buffered = { ...config, increaseBuffer: 2 };
+
+  it("banca para subir = mínima + N dias de stop com os novos contratos", () => {
+    expect(bankrollToReach(buffered, 2)).toBe(1234.56);
+  });
+
+  it("segura o aumento até a banca ter a folga, sem segurar reduções", () => {
+    const state = initialDrawdown(1600);
+    expect(nextContracts(config, 1600, state, 1)).toBe(3);
+    expect(nextContracts(buffered, 1600, state, 1)).toBe(2);
+    expect(nextContracts(buffered, 1900, initialDrawdown(1900), 1)).toBe(3);
+    expect(nextContracts({ ...buffered, contracts: 6 }, 1000, initialDrawdown(1000), 6)).toBe(1);
+  });
+
+  it("status indica quando a folga segura o aumento", () => {
+    const status = bankrollStatus(buffered, 1600);
+    expect(status).toMatchObject({ suggestedContracts: 2, heldByBuffer: true, requiredForNext: 1234.56 });
   });
 });
 

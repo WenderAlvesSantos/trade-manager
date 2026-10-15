@@ -3,37 +3,41 @@
 import { useMemo, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Card, Pagination, Table } from "antd";
-import type { DeviationsByDay, PendingDay } from "@/lib/pending-days";
+import { daysWithinMonths, projectDays } from "@/lib/daily-projection";
 import type { DaySummary } from "@/lib/trade-aggregations";
-import { filtersToQueryString, type TradeFilters } from "@/lib/trade-filters";
+import { ACCOUNT_LABEL, filtersToQueryString, type TradeFilters } from "@/lib/trade-filters";
+import type { DayBalance, DeviationsByDay, ProjectionInput } from "@/lib/trades-overlay";
 import { buildDailyColumns, type DailyRow } from "./daily-trades-columns";
 import { DayTradesDetail } from "./day-trades-detail";
+import { ProjectionControls, ProjectionSummary, useProjectionSettings } from "./projection-controls";
+import { ProjectionExportButton } from "./projection-export-button";
 
 type DailyTradesTableProps = {
   filters: TradeFilters;
   days: DaySummary[];
-  pendingDays: PendingDay[];
+  projection: ProjectionInput | null;
+  balances: Record<string, DayBalance>;
   deviations: DeviationsByDay;
   page: number;
   pageSize: number;
   totalDays: number;
 };
 
-function CardExtra({ filters, totalDays, pendingCount }: { filters: TradeFilters; totalDays: number; pendingCount: number }) {
-  return (
-    <span className="text-xs text-white/45">
-      {totalDays} dia(s) operado(s)
-      {filters.account
-        ? pendingCount > 0 && ` · ${pendingCount} pendente(s) no mês`
-        : " · selecione Simulador ou Real para ver os dias pendentes"}
-    </span>
-  );
+function useProjectedDays(projection: ProjectionInput | null) {
+  const [settings, setSettings] = useProjectionSettings();
+  const projected = useMemo(() => {
+    if (!projection) return [];
+    const days = daysWithinMonths(projection.days, projection.today, settings.months);
+    return projectDays(projection.configs, { ...projection, days, stopEvery: settings.stopEvery });
+  }, [projection, settings]);
+  return { settings, setSettings, projected };
 }
 
 // Paginação no servidor: a página fica na URL (?pagina=N); os trades de um dia só são buscados ao expandir.
-// Dias pendentes do mês ficam no topo da primeira página, fora da contagem da paginação.
-export function DailyTradesTable({ filters, days, pendingDays, deviations, page, pageSize, totalDays }: DailyTradesTableProps) {
+// Pregões projetados ficam no topo da primeira página (mais distante primeiro), fora da contagem da paginação.
+export function DailyTradesTable({ filters, days, projection, balances, deviations, page, pageSize, totalDays }: DailyTradesTableProps) {
   const columns = useMemo(() => buildDailyColumns(deviations), [deviations]);
+  const { settings, setSettings, projected } = useProjectedDays(projection);
   const router = useRouter();
   const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
@@ -43,22 +47,41 @@ export function DailyTradesTable({ filters, days, pendingDays, deviations, page,
   }
 
   const rows: DailyRow[] = [
-    ...(page === 1 ? pendingDays.map((day) => ({ ...day, kind: "pending" as const })) : []),
-    ...days.map((day) => ({ ...day, kind: "realized" as const })),
+    ...(page === 1 ? [...projected].reverse().map((day) => ({ ...day, kind: "projected" as const })) : []),
+    ...days.map((day) => ({ ...day, kind: "realized" as const, balance: balances[day.day] })),
   ];
 
   return (
     <Card
       title="Histórico diário"
-      extra={<CardExtra filters={filters} totalDays={totalDays} pendingCount={pendingDays.length} />}
+      extra={
+        projection ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <ProjectionControls settings={settings} onChange={setSettings} />
+            <ProjectionExportButton
+              input={projection}
+              projected={projected}
+              settings={settings}
+              accountLabel={filters.account ? ACCOUNT_LABEL[filters.account] : ""}
+              fileLabel={[filters.account, filters.asset].filter(Boolean).join("-").toLowerCase()}
+            />
+          </div>
+        ) : (
+          <span className="text-xs text-white/45">
+            {totalDays} dia(s) operado(s)
+            {!filters.account && " · selecione Simulador ou Real para ver a projeção"}
+          </span>
+        )
+      }
       styles={{ body: { padding: 0 } }}
     >
+      {projection && <ProjectionSummary input={projection} days={projected} />}
       <Table
         rowKey="day"
         columns={columns}
         dataSource={rows}
         loading={isPending}
-        scroll={{ x: 900 }}
+        scroll={{ x: 1100 }}
         pagination={false}
         expandable={{
           expandRowByClick: true,

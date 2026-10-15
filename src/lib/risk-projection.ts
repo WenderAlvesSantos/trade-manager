@@ -29,6 +29,8 @@ export type RiskConfig = {
   drawdownLimit: number;
   // Teto de contratos que deseja operar; 0 = sem limite.
   maxContracts: number;
+  // Stops seguidos que a banca deve aguentar mantendo os novos contratos para liberar um aumento; 0 = sem folga.
+  increaseBuffer: number;
   levelStartDate: string;
 };
 

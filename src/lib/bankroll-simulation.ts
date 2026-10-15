@@ -1,6 +1,6 @@
 import type { Asset } from "@/generated/prisma/enums";
 import { initialDrawdown, maxDrawdownOf, startPoints, stepDrawdown } from "@/lib/bankroll-drawdown";
-import { contractsForBankroll, type SizingConfig } from "@/lib/bankroll-sizing";
+import { contractsForBankroll, nextContracts, type SizingConfig } from "@/lib/bankroll-sizing";
 import type { RuleResolver } from "@/lib/day-deviation";
 import type { DaySummary } from "@/lib/trade-aggregations";
 import { calculateDailyIrrf, FEE_PER_CONTRACT, POINT_VALUE, roundToCents } from "@/lib/trade-calculations";
@@ -44,8 +44,8 @@ export type SimulationOverrides = Partial<Pick<SizingConfig, "riskPercent" | "dr
 // Regra vigente no dia (stop, risco, margem, proteção, máximo); sem resolvedor, usa a configuração.
 function configOn(config: SizingConfig, day: string, ruleFor?: RuleResolver, overrides: SimulationOverrides = {}): SizingConfig {
   if (!ruleFor) return { ...config, ...overrides };
-  const { dailyStopLimit, riskPercent, marginPerContract, drawdownLimit, maxContracts } = ruleFor(day);
-  return { ...config, dailyStopLimit, riskPercent, marginPerContract, drawdownLimit, maxContracts, ...overrides };
+  const { dailyStopLimit, riskPercent, marginPerContract, drawdownLimit, maxContracts, increaseBuffer } = ruleFor(day);
+  return { ...config, dailyStopLimit, riskPercent, marginPerContract, drawdownLimit, maxContracts, increaseBuffer, ...overrides };
 }
 
 // Banca se cada dia fosse operado com os contratos recomendados no fechamento anterior (inclui a proteção de queda),
@@ -67,7 +67,10 @@ export function simulateRecommendations(
 
   for (const day of days) {
     const dayConfig = configOn(config, day.day, ruleFor, overrides);
-    const contracts = contractsForBankroll(dayConfig, bankroll, state).recommended;
+    const contracts: number =
+      previous === null
+        ? contractsForBankroll(dayConfig, bankroll, state).recommended
+        : nextContracts(dayConfig, bankroll, state, previous);
     if (previous !== null && contracts !== previous) contractChanges++;
     previous = contracts;
     bankroll = roundToCents(bankroll + simulatedDayNet(config.asset, day, contracts));

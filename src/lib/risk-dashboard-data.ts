@@ -2,7 +2,7 @@ import type { AccountType } from "@/generated/prisma/enums";
 import { businessDaysOfMonth, monthRange, pendingBusinessDays } from "@/lib/b3-calendar";
 import { bankrollLevels } from "@/lib/bankroll-sizing";
 import { loadBankrollAnalysis } from "@/lib/bankroll";
-import { classifyDayDeviation, countDeviations, ruleResolver } from "@/lib/day-deviation";
+import { classifyDay, countDeviations } from "@/lib/day-deviation";
 import { getLevelHistory, type LevelHistoryEntry } from "@/lib/level-history";
 import {
   breakEvenLossDays,
@@ -11,8 +11,7 @@ import {
   projectMonthAtAverage,
   type AverageProjection,
 } from "@/lib/risk-projection";
-import { pickRule } from "@/lib/risk-rules";
-import type { AccountRiskConfig } from "@/lib/risk-settings";
+import { unitAsset, type SizingUnit } from "@/lib/sizing-unit";
 import { buildDaySummaries } from "@/lib/trade-aggregations";
 import { getDailyAssetTotals, oldestOfLatestTradingDays } from "@/lib/trades";
 
@@ -25,18 +24,22 @@ const monthFormatter = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "
 
 export type ContractChange = { day: string; from: number; to: number };
 
-// Mudanças de contratos registradas desde o início da banca, em ordem cronológica.
-function contractChangesSince(history: LevelHistoryEntry[], from: string): ContractChange[] {
-  return history
+// Mudanças de contratos desde o início da banca, em ordem cronológica. Com vários ativos, a mesma mudança
+// registrada em cada um aparece uma vez.
+function contractChangesSince(histories: LevelHistoryEntry[][], from: string): ContractChange[] {
+  const changes = histories
+    .flat()
     .map((entry) => ({ day: entry.date.toISOString().slice(0, 10), from: entry.fromContracts, to: entry.toContracts }))
-    .filter((change) => change.day >= from)
-    .reverse();
+    .filter((change) => change.day >= from);
+  const unique = new Map(changes.map((change) => [`${change.day}:${change.from}:${change.to}`, change]));
+  return [...unique.values()].sort((a, b) => a.day.localeCompare(b.day));
 }
 
-async function movingAverageNets(userId: string, account: AccountType, config: AccountRiskConfig) {
-  const from = await oldestOfLatestTradingDays(userId, account, config.asset, MOVING_AVERAGE_DAYS);
+async function movingAverageNets(userId: string, account: AccountType, unit: SizingUnit) {
+  const asset = unitAsset(unit);
+  const from = await oldestOfLatestTradingDays(userId, account, asset, MOVING_AVERAGE_DAYS);
   if (!from) return [];
-  const rows = await getDailyAssetTotals(userId, { account, asset: config.asset, from });
+  const rows = await getDailyAssetTotals(userId, { account, asset, from });
   return buildDaySummaries(rows).map((day) => day.netResult);
 }
 
@@ -52,31 +55,36 @@ function averageScenarios(realizedNets: number[], movingNets: number[], pendingC
   return candidates.flatMap(({ projection, ...rest }) => (projection ? [{ ...rest, projection }] : []));
 }
 
-// Projeção do mês e gestão de banca de uma conta + ativo. Independe do filtro de período do Dashboard.
-export async function loadRiskDashboard(userId: string, account: AccountType, config: AccountRiskConfig, today: string) {
+// Projeção do mês e gestão da banca da conta (um ativo ou todos os operados com banca única).
+// Independe do filtro de período do Dashboard.
+export async function loadRiskDashboard(userId: string, account: AccountType, unit: SizingUnit, today: string) {
+  const { config } = unit;
   const month = monthRange(today);
-  const [monthRows, bankroll, movingNets, levelHistory] = await Promise.all([
-    getDailyAssetTotals(userId, { account, asset: config.asset, ...month }),
-    loadBankrollAnalysis(userId, account, config),
-    movingAverageNets(userId, account, config),
-    getLevelHistory(userId, account, config.asset),
+  const [monthRows, bankroll, movingNets, levelHistories] = await Promise.all([
+    getDailyAssetTotals(userId, { account, asset: unitAsset(unit), ...month }),
+    loadBankrollAnalysis(userId, account, unit),
+    movingAverageNets(userId, account, unit),
+    Promise.all(unit.assets.map((asset) => getLevelHistory(userId, account, asset))),
   ]);
 
-  const ruleFor = ruleResolver(pickRule(config), bankroll.ruleHistory);
+  const { rules } = bankroll;
   const monthDays = buildDaySummaries(monthRows);
   const [year, monthNumber] = today.split("-").map(Number);
   const businessDays = businessDaysOfMonth(year, monthNumber).length;
-  const pendingCount = pendingBusinessDays(today, new Set(monthDays.map((day) => day.day))).length;
+  const pendingDays = pendingBusinessDays(today, new Set(monthDays.map((day) => day.day)));
+  const pendingCount = pendingDays.length;
   const realizedNets = monthDays.map((day) => day.netResult);
 
-  const deviations = monthDays.flatMap((day) => {
-    const deviation = classifyDayDeviation(ruleFor(day.day), day.pointsByAsset);
-    return deviation ? [{ day: day.day, ...deviation }] : [];
-  });
+  const assetResolvers = rules.assetRules.map((item) => item.ruleFor);
+  const deviations = monthDays.flatMap((day) =>
+    classifyDay(assetResolvers, day.day, day.pointsByAsset).map((deviation) => ({ day: day.day, ...deviation })),
+  );
 
   return {
     account,
     config,
+    label: unit.label,
+    configs: unit.configs,
     today,
     monthLabel: monthFormatter.format(new Date(month.from)),
     nextMonth: monthNumber === 12 ? { year: year + 1, month: 1 } : { year, month: monthNumber + 1 },
@@ -85,6 +93,7 @@ export async function loadRiskDashboard(userId: string, account: AccountType, co
     businessDays,
     realizedDays: monthDays.length,
     pendingCount,
+    pendingDays,
     scenarios: LOSS_DAY_SCENARIOS.map((lossDays) => projectMonth(config, realizedNets, pendingCount, lossDays)),
     averageScenarios: averageScenarios(realizedNets, movingNets, pendingCount),
     breakEven: breakEvenLossDays(config, businessDays),
@@ -95,9 +104,10 @@ export async function loadRiskDashboard(userId: string, account: AccountType, co
     protectionEvents: bankroll.protectionEvents,
     simulation: bankroll.simulation,
     simulationDays: bankroll.simulationDays,
-    ruleHistory: bankroll.ruleHistory,
+    ruleHistory: rules.ruleHistory,
+    assetRuleHistories: rules.assetRules.map(({ asset, history }) => ({ asset, history })),
     bankrollMaxDrawdown: bankroll.maxDrawdown,
-    contractChanges: contractChangesSince(levelHistory, config.bankrollStartDate),
+    contractChanges: contractChangesSince(levelHistories, config.bankrollStartDate),
     bankrollLevels: bankrollLevels(config, bankroll.status.bankroll),
   };
 }

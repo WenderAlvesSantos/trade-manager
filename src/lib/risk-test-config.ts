@@ -19,5 +19,6 @@ export const TEST_RISK_CONFIG: RiskConfig = {
   riskPercent: 10,
   drawdownLimit: 20,
   maxContracts: 0,
+  increaseBuffer: 0,
   levelStartDate: "2026-10-01",
 };

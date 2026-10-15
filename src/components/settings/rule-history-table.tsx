@@ -5,7 +5,7 @@ import { Card, Table, Tag, type TableColumnsType } from "antd";
 import type { DatedRule } from "@/lib/day-deviation";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { RULE_BASELINE_DATE } from "@/lib/rule-baseline";
-import { formatMaxContracts } from "@/lib/rule-changes";
+import { formatIncreaseBuffer, formatMaxContracts } from "@/lib/rule-changes";
 
 const COLUMNS: TableColumnsType<DatedRule> = [
   {
@@ -30,6 +30,7 @@ const COLUMNS: TableColumnsType<DatedRule> = [
     render: (value: number) => (value > 0 ? `${value}%` : "desligada"),
   },
   { title: "Máximo", dataIndex: "maxContracts", align: "right", render: formatMaxContracts },
+  { title: "Folga p/ subir", dataIndex: "increaseBuffer", align: "right", render: formatIncreaseBuffer },
 ];
 
 // Versões das regras: desvios e simulação da banca usam a versão vigente em cada dia.

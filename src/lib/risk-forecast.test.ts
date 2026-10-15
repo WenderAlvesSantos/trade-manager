@@ -1,9 +1,32 @@
 import { describe, expect, it } from "vitest";
+import { combinedConfig } from "./combined-sizing";
 import { forecastMonths } from "./risk-forecast";
-import { projectMonth } from "./risk-projection";
+import { projectMonth, type RiskConfig } from "./risk-projection";
+import { alternatePeriodNet } from "./stops-mode";
 import { TEST_RISK_CONFIG as config } from "./risk-test-config";
 
 const options = { startYear: 2026, startMonth: 11, months: 4, scenario: { lossDays: 3 }, initialBankroll: 1000 };
+
+describe("forecastMonths com banca única", () => {
+  const win: RiskConfig = { ...config, projectedGainDay: 250, projectedLossDay: 250 };
+  const wdo: RiskConfig = { ...config, asset: "WDO", dailyStopLimit: 10, projectedGainDay: 6, projectedLossDay: 10, marginPerContract: 0 };
+  const assets = [win, wdo];
+  const base = { ...options, initialBankroll: 5000, months: 1, assets };
+
+  it("alternados: cada ativo para nos seus dias, com os mesmos contratos do pior caso", () => {
+    const [together] = forecastMonths(combinedConfig(assets), { ...base, stops: "together" });
+    const [alternate] = forecastMonths(combinedConfig(assets), { ...base, stops: "alternate" });
+    expect(alternate.contracts).toBe(together.contracts);
+    expect(alternate.net).toBe(alternatePeriodNet(assets, together.contracts, together.businessDays, 3));
+    expect(alternate.net).not.toBe(together.net);
+  });
+
+  it("um só ativo ignora o modo alternado", () => {
+    const [single] = forecastMonths(config, { ...options, months: 1, assets: [config], stops: "alternate" });
+    const [plain] = forecastMonths(config, { ...options, months: 1 });
+    expect(single.net).toBe(plain.net);
+  });
+});
 
 describe("forecastMonths", () => {
   it("usa os pregões de cada mês e vira o ano", () => {

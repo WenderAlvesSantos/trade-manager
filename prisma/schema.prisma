@@ -76,6 +76,7 @@ model RiskSettings {
   riskPercent        Float       @default(10) // % máximo da banca perdido num dia de stop
   drawdownLimit      Float       @default(20) // % de queda desde o pico que ativa a proteção; 0 = desligado
   maxContracts       Int         @default(0) // teto de contratos que deseja operar; 0 = sem limite
+  increaseBuffer     Int         @default(0) // stops seguidos que a banca deve aguentar com os novos contratos para subir
   levelStartDate     DateTime    @db.Date
   updatedAt          DateTime    @updatedAt
 
@@ -137,6 +138,7 @@ model RiskRuleVersion {
   marginPerContract  Float       @default(0)
   drawdownLimit      Float       @default(20)
   maxContracts       Int         @default(0)
+  increaseBuffer     Int         @default(0)
   createdAt          DateTime    @default(now())
 
   @@unique([userId, accountType, asset, effectiveFrom])

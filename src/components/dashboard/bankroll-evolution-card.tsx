@@ -58,7 +58,7 @@ export function BankrollEvolutionCard({ data }: { data: RiskDashboardData }) {
     <Card
       title={
         <span className="flex items-center gap-2">
-          <LineChartOutlined /> Evolução da banca · {config.asset}
+          <LineChartOutlined /> Evolução da banca · {data.label}
         </span>
       }
       extra={
@@ -85,7 +85,7 @@ export function BankrollEvolutionCard({ data }: { data: RiskDashboardData }) {
           <RiskComparisonPanel data={data} />
         </div>
       ) : (
-        <Empty description={`Sem dias operados em ${config.asset} desde ${formatDate(config.bankrollStartDate)}.`} />
+        <Empty description={`Sem dias operados em ${data.label} desde ${formatDate(config.bankrollStartDate)}.`} />
       )}
     </Card>
   );

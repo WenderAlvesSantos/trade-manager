@@ -14,6 +14,10 @@ export type DaySummary = {
   wins: number;
   winRate: number;
   pointsByAsset: PointsByAsset;
+  contractsByAsset: Partial<Record<Asset, number>>;
+  tradesByAsset: Partial<Record<Asset, number>>;
+  // Bruto − taxas B3 de cada ativo (o IRRF é sobre o dia somado).
+  resultByAsset: Partial<Record<Asset, number>>;
   grossResult: number;
   fees: number;
   operatingProfit: number;
@@ -47,6 +51,9 @@ function addPoints(target: PointsByAsset, asset: Asset, { gained, lost }: Points
 
 function summarizeDay(day: string, rows: DailyAssetRow[]): DaySummary {
   const pointsByAsset: PointsByAsset = {};
+  const contractsByAsset: DaySummary["contractsByAsset"] = {};
+  const resultByAsset: DaySummary["resultByAsset"] = {};
+  const tradesByAsset: DaySummary["tradesByAsset"] = {};
   let tradeCount = 0;
   let wins = 0;
   let gross = 0;
@@ -56,6 +63,9 @@ function summarizeDay(day: string, rows: DailyAssetRow[]): DaySummary {
 
   for (const row of rows) {
     addPoints(pointsByAsset, row.asset, { gained: row.pointsGained, lost: row.pointsLost });
+    contractsByAsset[row.asset] = Math.max(contractsByAsset[row.asset] ?? 0, row.contracts);
+    resultByAsset[row.asset] = roundToCents((resultByAsset[row.asset] ?? 0) + row.grossResult - row.fees);
+    tradesByAsset[row.asset] = (tradesByAsset[row.asset] ?? 0) + row.tradeCount;
     tradeCount += row.tradeCount;
     wins += row.wins;
     gross += row.grossResult;
@@ -75,6 +85,9 @@ function summarizeDay(day: string, rows: DailyAssetRow[]): DaySummary {
     wins,
     winRate: wins / tradeCount,
     pointsByAsset,
+    contractsByAsset,
+    tradesByAsset,
+    resultByAsset,
     grossResult,
     fees,
     operatingProfit,

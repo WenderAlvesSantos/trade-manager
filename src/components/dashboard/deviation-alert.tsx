@@ -4,10 +4,11 @@ import { Alert } from "antd";
 import { daysLabel, DeviationTags } from "@/components/shared/deviation-tags";
 import { formatDate } from "@/lib/format";
 import type { RiskDashboardData } from "@/lib/risk-dashboard-data";
+import { toleranceLabel } from "./unit-labels";
 
 // Contador mensal de dias que fugiram da meta/stop do robô além da tolerância configurada.
 export function DeviationAlert({ data }: { data: RiskDashboardData }) {
-  const { deviations, deviationCounts: counts, config, monthLabel, realizedDays } = data;
+  const { deviations, deviationCounts: counts, monthLabel, realizedDays } = data;
   if (realizedDays === 0) return null;
 
   if (counts.total === 0) {
@@ -15,7 +16,7 @@ export function DeviationAlert({ data }: { data: RiskDashboardData }) {
       <Alert
         type="success"
         showIcon
-        title={`Nenhum dia fora do esperado em ${monthLabel} (${daysLabel(realizedDays)} operado(s), tolerância de ${config.deviationTolerance} pts)`}
+        title={`Nenhum dia fora do esperado em ${monthLabel} (${daysLabel(realizedDays)} operado(s), tolerância de ${toleranceLabel(data)})`}
       />
     );
   }
@@ -33,7 +34,7 @@ export function DeviationAlert({ data }: { data: RiskDashboardData }) {
       description={
         <ul className="mt-1 flex flex-col gap-0.5 text-sm">
           {deviations.map((item) => (
-            <li key={item.day}>
+            <li key={`${item.day}-${item.asset}`}>
               <span className="font-medium">{formatDate(item.day)}</span> — {item.message}
             </li>
           ))}

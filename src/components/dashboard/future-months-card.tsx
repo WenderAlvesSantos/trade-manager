@@ -9,6 +9,8 @@ import { forecastMonths, type ForecastMonth } from "@/lib/risk-forecast";
 import { MOVING_AVERAGE_DAYS } from "@/lib/risk-projection";
 import { COLORS, resultHex } from "@/lib/theme";
 import { MoneyLineChart, type MoneyPoint } from "./money-line-chart";
+import { STOPS_MODE_TEXT, StopsModeSelect, useStopsMode } from "./stops-mode-select";
+import { isCombined } from "./unit-labels";
 import {
   DEFAULT_SCENARIO,
   forecastScenarioFor,
@@ -54,6 +56,8 @@ function toChartData(months: ForecastMonth[]): MoneyPoint[] {
 // Meses cheios a partir do próximo; a banca inicial é a atual mais o que falta do mês corrente no cenário escolhido.
 export function FutureMonthsCard({ data }: { data: RiskDashboardData }) {
   const [scenarioKey, setScenarioKey] = useState<ScenarioKey>(DEFAULT_SCENARIO);
+  const [stops, setStops] = useStopsMode(data);
+  const scenario = useMemo(() => forecastScenarioFor(data, scenarioKey), [data, scenarioKey]);
 
   const months = useMemo(
     () =>
@@ -61,18 +65,20 @@ export function FutureMonthsCard({ data }: { data: RiskDashboardData }) {
         startYear: data.nextMonth.year,
         startMonth: data.nextMonth.month,
         months: FORECAST_MONTHS,
-        scenario: forecastScenarioFor(data, scenarioKey),
-        initialBankroll: data.bankroll.bankroll + pendingNetFor(data, scenarioKey),
+        scenario,
+        initialBankroll: data.bankroll.bankroll + pendingNetFor(data, scenarioKey, stops),
         drawdown: data.bankrollDrawdown,
+        assets: data.configs,
+        stops,
       }),
-    [data, scenarioKey],
+    [data, scenario, scenarioKey, stops],
   );
 
   return (
     <Card
       title={
         <span className="flex items-center gap-2">
-          <FundProjectionScreenOutlined /> Banca nos próximos {FORECAST_MONTHS} meses · {data.config.asset}
+          <FundProjectionScreenOutlined /> Banca nos próximos {FORECAST_MONTHS} meses · {data.label}
         </span>
       }
       extra={
@@ -84,6 +90,11 @@ export function FutureMonthsCard({ data }: { data: RiskDashboardData }) {
         />
       }
     >
+      {isCombined(data) && "lossDays" in scenario && (
+        <div className="mb-3">
+          <StopsModeSelect value={stops} onChange={setStops} />
+        </div>
+      )}
       {data.bankroll.configured ? (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <Table rowKey={(row) => `${row.year}-${row.month}`} size="small" columns={COLUMNS} dataSource={months} pagination={false} />
@@ -97,7 +108,9 @@ export function FutureMonthsCard({ data }: { data: RiskDashboardData }) {
         global, teto pela margem
         {data.config.drawdownLimit > 0 ? `, proteção ao cair ${data.config.drawdownLimit}% do pico` : ""}
         {data.config.maxContracts > 0 ? `, máximo de ${data.config.maxContracts} contratos` : ", sem máximo de contratos"}). As médias repetem o líquido por contrato dos dias operados no mês ou dos últimos{" "}
-        {MOVING_AVERAGE_DAYS} pregões operados. Não considera custos fora da B3.
+        {MOVING_AVERAGE_DAYS} pregões operados.
+        {isCombined(data) && "lossDays" in scenario && ` ${STOPS_MODE_TEXT[stops]}`}{" "}
+        Não considera custos fora da B3.
       </p>
     </Card>
   );

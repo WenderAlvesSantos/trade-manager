@@ -13,6 +13,7 @@ const row = (overrides: Partial<DailyAssetRow>): DailyAssetRow => ({
   pointsLost: 0,
   tradeProfit: 0,
   tradeLoss: 0,
+  contracts: 1,
   ...overrides,
 });
 

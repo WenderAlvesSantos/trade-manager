@@ -73,7 +73,8 @@ function useAdopt(data: RiskDashboardData) {
     setPendingKey(row.key);
     startTransition(async () => {
       const sizing = { riskPercent: row.riskPercent, drawdownLimit: row.drawdownLimit };
-      const result = await adoptSizingAction(data.account, data.config.asset, sizing);
+      const assets = data.configs.map((config) => config.asset);
+      const result = await adoptSizingAction(data.account, assets, sizing);
       if (result?.error) message.error(result.error);
       else message.success(result?.success);
     });
@@ -88,7 +89,7 @@ export function RiskComparisonPanel({ data }: { data: RiskDashboardData }) {
     () => ({ risks: [...new Set([...DEFAULT_RISKS, config.riskPercent])], drawdowns: [config.drawdownLimit] }),
     [config.riskPercent, config.drawdownLimit],
   );
-  const storageKey = `megan:risk-comparison:${data.account}:${config.asset}`;
+  const storageKey = `megan:risk-comparison:${data.account}:${data.label}`;
   const [options, setOptions] = useStoredState(storageKey, fallback, parseStoredOptions);
   const adopt = useAdopt(data);
 

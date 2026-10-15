@@ -9,6 +9,7 @@ import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import type { RiskDashboardData } from "@/lib/risk-dashboard-data";
 import { COLORS, resultHex } from "@/lib/theme";
 import { BankrollLevelsTable } from "./bankroll-levels-table";
+import { contractsLabel, isCombined, stopLimitsLabel } from "./unit-labels";
 
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -27,7 +28,8 @@ function SuggestionAlert({ data }: { data: RiskDashboardData }) {
 
   function apply() {
     startTransition(async () => {
-      const result = await applyContractsAction(account, config.asset, bankroll.suggestedContracts);
+      const assets = data.configs.map((item) => item.asset);
+      const result = await applyContractsAction(account, assets, bankroll.suggestedContracts);
       if (result?.error) message.error(result.error);
       else message.success(result?.success);
     });
@@ -41,7 +43,7 @@ function SuggestionAlert({ data }: { data: RiskDashboardData }) {
     <Alert
       type={up ? "success" : "warning"}
       showIcon
-      title={up ? `A banca comporta ${bankroll.suggestedContracts} contratos no risco de ${config.riskPercent}%.` : downReason}
+      title={up ? `A banca comporta ${contractsLabel(data, bankroll.suggestedContracts)} no risco de ${config.riskPercent}%.` : downReason}
       action={
         <Button size="small" type={up ? "primary" : "default"} danger={!up} loading={isPending} onClick={apply}>
           {up ? "Subir" : "Reduzir"}
@@ -69,7 +71,7 @@ export function BankrollCard({ data }: { data: RiskDashboardData }) {
   const { config, bankroll, bankrollNet, bankrollLevels } = data;
   const title = (
     <span className="flex items-center gap-2">
-      <WalletOutlined /> Gestão de banca · {config.asset}
+      <WalletOutlined /> Gestão de banca · {data.label}
     </span>
   );
 
@@ -79,7 +81,7 @@ export function BankrollCard({ data }: { data: RiskDashboardData }) {
         <Alert
           type="info"
           showIcon
-          title="Informe a banca inicial deste ativo para calcular quantos contratos operar."
+          title="Informe a banca inicial em Configurações para calcular quantos contratos operar."
           action={<Link href="/configuracoes">Configurar</Link>}
         />
       </Card>
@@ -91,7 +93,7 @@ export function BankrollCard({ data }: { data: RiskDashboardData }) {
     <Card title={title} extra={<Link href="/configuracoes" className="text-xs">Configurar</Link>} className="h-full">
       <div className="flex flex-wrap gap-8">
         <Info label="Banca atual" value={formatCurrency(bankroll.bankroll)} />
-        <Info label="Operando" value={`${config.contracts} contr.`} />
+        <Info label={isCombined(data) ? "Operando (cada ativo)" : "Operando"} value={`${config.contracts} contr.`} />
         <Info
           label="Recomendado (risco / margem)"
           value={`${bankroll.recommended} contr. (${bankroll.byRisk} / ${bankroll.byMargin ?? "∞"})`}
@@ -103,9 +105,20 @@ export function BankrollCard({ data }: { data: RiskDashboardData }) {
         {formatCurrency(bankroll.bankrollPerContract)} de banca, +1 contrato.
       </p>
       <p className="mt-1 text-xs" style={{ color: overRisk ? COLORS.loss : COLORS.textMuted }}>
-        Stop global ({config.dailyStopLimit} pts) com {config.contracts} contr.: −{formatCurrency(bankroll.currentStopCost)} (
-        {formatPercent(bankroll.currentRiskShare)} da banca) · aguenta {bankroll.stopDaysToRuin} stops seguidos.
+        {isCombined(data) ? "Stop nos dois ativos" : "Stop global"} ({stopLimitsLabel(data)}) com {config.contracts} contr.: −
+        {formatCurrency(bankroll.currentStopCost)} (
+        {formatPercent(bankroll.currentRiskShare)} da banca) ·{" "}
+        {bankroll.stopStreak.keepingContracts === 0
+          ? "1 stop já obriga a reduzir os contratos"
+          : `mantém ${config.contracts} contr. por ${bankroll.stopStreak.keepingContracts} stop(s) seguido(s)`}{" "}
+        · reduzindo, aguenta {bankroll.stopStreak.untilOut} stops seguidos até parar.
       </p>
+      {bankroll.heldByBuffer && (
+        <p className="mt-1 text-xs text-white/45">
+          A banca já comporta {bankroll.recommended} contratos, mas a folga de {config.increaseBuffer} stop(s) segura o
+          aumento até {formatCurrency(bankroll.requiredForNext)}.
+        </p>
+      )}
       <ProtectionAlert data={data} />
       {bankroll.atMax ? (
         <p className="mt-3 text-xs" style={{ color: COLORS.profit }}>

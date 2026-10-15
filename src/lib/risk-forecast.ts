@@ -1,7 +1,8 @@
 import { businessDaysOfMonth } from "@/lib/b3-calendar";
 import { initialDrawdown, stepDrawdown, type DrawdownState } from "@/lib/bankroll-drawdown";
-import { contractsForBankroll } from "@/lib/bankroll-sizing";
+import { contractsForBankroll, nextContracts } from "@/lib/bankroll-sizing";
 import { projectMonth, type RiskConfig } from "@/lib/risk-projection";
+import { alternatePeriodNet, isAlternate, type StopsMode } from "@/lib/stops-mode";
 import { roundToCents } from "@/lib/trade-calculations";
 
 export type ForecastMonth = {
@@ -29,13 +30,22 @@ type ForecastOptions = {
   initialBankroll: number;
   // Pico e proteção de queda atuais; sem eles, o pico parte da banca inicial.
   drawdown?: DrawdownState;
+  // Ativos que dividem a banca e como os stops caem entre eles (ver monthLadder).
+  assets?: RiskConfig[];
+  stops?: StopsMode;
 };
 
 const nextMonth = (year: number, month: number) => (month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 });
 
-function monthNet(config: RiskConfig, contracts: number, businessDays: number, scenario: ForecastScenario) {
+function monthNet(config: RiskConfig, contracts: number, businessDays: number, options: ForecastOptions) {
+  const { scenario } = options;
   if (contracts <= 0) return 0;
-  if ("lossDays" in scenario) return projectMonth({ ...config, contracts }, [], businessDays, scenario.lossDays).total;
+  if ("lossDays" in scenario) {
+    if (isAlternate(options.stops, options.assets)) {
+      return alternatePeriodNet(options.assets, contracts, businessDays, scenario.lossDays);
+    }
+    return projectMonth({ ...config, contracts }, [], businessDays, scenario.lossDays).total;
+  }
   return roundToCents(scenario.dailyNetPerContract * contracts * businessDays);
 }
 
@@ -51,12 +61,12 @@ export function forecastMonths(config: RiskConfig, options: ForecastOptions): Fo
 
   for (let index = 0; index < options.months; index++) {
     const businessDays = businessDaysOfMonth(year, month).length;
-    const net = monthNet(config, contracts, businessDays, options.scenario);
+    const net = monthNet(config, contracts, businessDays, options);
     bankroll = roundToCents(bankroll + net);
-    fixedBankroll = roundToCents(fixedBankroll + monthNet(config, config.contracts, businessDays, options.scenario));
+    fixedBankroll = roundToCents(fixedBankroll + monthNet(config, config.contracts, businessDays, options));
 
     drawdown = stepDrawdown(drawdown, bankroll, config.drawdownLimit);
-    const recommended = contractsForBankroll(config, bankroll, drawdown).recommended;
+    const recommended = nextContracts(config, bankroll, drawdown, contracts);
     result.push({
       year,
       month,

@@ -37,14 +37,18 @@ export type DailyAssetRow = {
   // Soma dos resultados (bruto - taxas B3) dos trades positivos e, em módulo, dos negativos.
   tradeProfit: number;
   tradeLoss: number;
+  // Maior quantidade de contratos usada no dia no ativo.
+  contracts: number;
 };
 
-// Data mais antiga entre os últimos `days` dias operados da conta no ativo (base da média móvel); null sem histórico.
-export async function oldestOfLatestTradingDays(userId: string, account: AccountType, asset: Asset, days: number) {
+// Data mais antiga entre os últimos `days` dias operados da conta (no ativo, se informado; base da média móvel).
+// null sem histórico.
+export async function oldestOfLatestTradingDays(userId: string, account: AccountType, asset: Asset | undefined, days: number) {
+  const assetFilter = asset ? Prisma.sql`AND "asset" = ${asset}::"Asset"` : Prisma.empty;
   const rows = await prisma.$queryRaw<{ day: string }[]>`
     SELECT DISTINCT to_char("date", 'YYYY-MM-DD') AS "day"
     FROM "Trade"
-    WHERE "userId" = ${userId} AND "accountType" = ${account}::"AccountType" AND "asset" = ${asset}::"Asset"
+    WHERE "userId" = ${userId} AND "accountType" = ${account}::"AccountType" ${assetFilter}
     ORDER BY "day" DESC
     LIMIT ${days}
   `;
@@ -69,7 +73,8 @@ export function getDailyAssetTotals(userId: string, { account, from, to, asset }
       ROUND(SUM(GREATEST("points", 0))::numeric, 2)::float8 AS "pointsGained",
       ROUND(SUM(GREATEST(-"points", 0))::numeric, 2)::float8 AS "pointsLost",
       SUM(GREATEST("grossResult" - "fees", 0))::float8 AS "tradeProfit",
-      SUM(GREATEST("fees" - "grossResult", 0))::float8 AS "tradeLoss"
+      SUM(GREATEST("fees" - "grossResult", 0))::float8 AS "tradeLoss",
+      MAX("contracts")::int AS "contracts"
     FROM "Trade"
     WHERE "userId" = ${userId} ${accountFilter} ${assetFilter} ${fromFilter} ${toFilter}
     GROUP BY "date", "asset"

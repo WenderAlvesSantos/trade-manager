@@ -11,6 +11,7 @@ const RULE_FIELDS = [
   "marginPerContract",
   "drawdownLimit",
   "maxContracts",
+  "increaseBuffer",
 ] as const;
 
 export const pickRule = (source: RiskRule): RiskRule => ({
@@ -22,6 +23,7 @@ export const pickRule = (source: RiskRule): RiskRule => ({
   marginPerContract: source.marginPerContract,
   drawdownLimit: source.drawdownLimit,
   maxContracts: source.maxContracts,
+  increaseBuffer: source.increaseBuffer,
 });
 
 export const ruleChanged = (previous: RiskRule, next: RiskRule) =>

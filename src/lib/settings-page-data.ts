@@ -1,10 +1,11 @@
 import type { AccountType, Asset } from "@/generated/prisma/enums";
-import { loadBankrollCurve } from "@/lib/bankroll";
+import { loadBankrollCurve, loadUnitCurve } from "@/lib/bankroll";
 import type { DatedRule } from "@/lib/day-deviation";
 import { getLevelHistory, type LevelHistoryEntry } from "@/lib/level-history";
 import { getRuleHistory } from "@/lib/risk-rules";
 import { ASSETS } from "@/lib/risk-projection";
-import { getAllRiskConfigs, type AccountRiskConfig } from "@/lib/risk-settings";
+import { getAllRiskConfigs, type AccountRiskConfig, type AssetConfigs } from "@/lib/risk-settings";
+import { sizingUnit } from "@/lib/sizing-unit";
 import type { EquityPoint } from "@/lib/trade-aggregations";
 
 export type AssetSettingsData = {
@@ -16,7 +17,13 @@ export type AssetSettingsData = {
   bankrollCurve: EquityPoint[];
 };
 
-export type SettingsPageData = Record<AccountType, Record<Asset, AssetSettingsData>>;
+export type AccountSettingsData = {
+  assets: Record<Asset, AssetSettingsData>;
+  // Curva da banca da conta com todos os ativos salvos (cada um desde o próprio início), para a prévia combinada.
+  combinedCurve: EquityPoint[];
+};
+
+export type SettingsPageData = Record<AccountType, AccountSettingsData>;
 
 const ACCOUNTS: AccountType[] = ["SIMULADOR", "REAL"];
 
@@ -29,15 +36,18 @@ async function loadAsset(userId: string, account: AccountType, config: AccountRi
   return { config, levelHistory, ruleHistory: [...ruleHistory].reverse(), bankrollCurve };
 }
 
+async function loadAccount(userId: string, account: AccountType, configs: AssetConfigs): Promise<AccountSettingsData> {
+  const saved = ASSETS.map((asset) => configs[asset]).filter((config) => config.saved);
+  const [assetData, combinedCurve] = await Promise.all([
+    Promise.all(ASSETS.map((asset) => loadAsset(userId, account, configs[asset]))),
+    saved.length > 1 ? loadUnitCurve(userId, account, sizingUnit(saved)) : Promise.resolve([]),
+  ]);
+  const assets = Object.fromEntries(ASSETS.map((asset, index) => [asset, assetData[index]])) as Record<Asset, AssetSettingsData>;
+  return { assets, combinedCurve };
+}
+
 export async function loadSettingsPageData(userId: string, today: string): Promise<SettingsPageData> {
   const configs = await getAllRiskConfigs(userId, today);
-  const entries = await Promise.all(
-    ACCOUNTS.flatMap((account) =>
-      ASSETS.map(async (asset) => [account, asset, await loadAsset(userId, account, configs[account][asset])] as const),
-    ),
-  );
-
-  const data = { SIMULADOR: {}, REAL: {} } as SettingsPageData;
-  for (const [account, asset, assetData] of entries) data[account][asset] = assetData;
-  return data;
+  const [SIMULADOR, REAL] = await Promise.all(ACCOUNTS.map((account) => loadAccount(userId, account, configs[account])));
+  return { SIMULADOR, REAL };
 }

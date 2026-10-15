@@ -24,6 +24,7 @@ export const DEFAULT_RISK_VALUES: Record<Asset, RiskValues> = {
     riskPercent: 10,
     drawdownLimit: 20,
     maxContracts: 0,
+    increaseBuffer: 0,
   },
   WDO: {
     active: false,
@@ -41,6 +42,7 @@ export const DEFAULT_RISK_VALUES: Record<Asset, RiskValues> = {
     riskPercent: 10,
     drawdownLimit: 20,
     maxContracts: 0,
+    increaseBuffer: 0,
   },
 };
 
@@ -67,6 +69,7 @@ export function riskValues(source: RiskValues): RiskValues {
     riskPercent: source.riskPercent,
     drawdownLimit: source.drawdownLimit,
     maxContracts: source.maxContracts,
+    increaseBuffer: source.increaseBuffer,
   };
 }
 

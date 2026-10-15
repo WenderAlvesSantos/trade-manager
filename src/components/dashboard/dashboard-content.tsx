@@ -23,7 +23,7 @@ export async function DashboardContent({ searchParams }: { searchParams: TradeSe
         action={<AddTradesDialog today={today} defaultAccount={defaultAccount} />}
       />
       <FilterBar key={filtersToQueryString(filters)} initialFilters={filters} />
-      <RiskManagementSection userId={userId} account={filters.account} asset={filters.asset} today={today} />
+      <RiskManagementSection userId={userId} account={filters.account} today={today} />
       <SummaryCards summary={summary} />
       <RiskMetricsCards metrics={computeRiskMetrics(equityCurve)} profitFactor={summary.profitFactor} />
       <DailyResultChart data={equityCurve} />

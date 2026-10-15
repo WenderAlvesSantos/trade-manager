@@ -84,6 +84,15 @@ export const FIELD_GROUPS: FieldGroup[] = [
         step: 5,
         tooltip: "Quantidade máxima que deseja chegar a operar; a recomendação e as projeções param aqui. 0 = sem limite",
       },
+      {
+        name: "increaseBuffer",
+        label: "Folga para subir",
+        suffix: "stops",
+        min: 0,
+        step: 1,
+        tooltip:
+          "Só libera um aumento quando a banca aguentar esse número de stops seguidos e ainda comportar os novos contratos. Não afeta reduções. 0 = sem folga",
+      },
     ],
   },
 ];

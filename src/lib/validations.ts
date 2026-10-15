@@ -55,6 +55,7 @@ export const riskSettingsSchema = z.object({
     .min(0, "Limite de queda não pode ser negativo.")
     .max(99, "Limite de queda: máximo 99%."),
   maxContracts: wholeNumber("Máximo de contratos", 0),
+  increaseBuffer: wholeNumber("Folga para subir", 0).max(20, "Folga para subir: máximo 20 stops."),
 });
 
 export type RiskSettingsInput = z.input<typeof riskSettingsSchema>;

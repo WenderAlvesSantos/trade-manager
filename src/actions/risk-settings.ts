@@ -10,7 +10,10 @@ import { getRiskConfig, riskValues } from "@/lib/risk-settings";
 import { requireUserId } from "@/lib/session";
 import { assetSchema, firstIssueMessage, riskSettingsSchema, type FormState, type RiskSettingsInput } from "@/lib/validations";
 
-const targetSchema = z.object({ account: z.enum(["SIMULADOR", "REAL"]), asset: assetSchema });
+const accountSchema = z.enum(["SIMULADOR", "REAL"]);
+const targetSchema = z.object({ account: accountSchema, asset: assetSchema });
+// Banca da conta: as ações do Dashboard valem para todos os ativos que dividem a banca.
+const unitSchema = z.object({ account: accountSchema, assets: z.array(assetSchema).min(1) });
 
 // Mudar a quantidade de contratos encerra o nível atual (registrado no histórico) e inicia outro hoje.
 async function prepareLevel(userId: string, account: AccountType, asset: Asset, contracts: number, manual: boolean) {
@@ -56,29 +59,18 @@ export async function saveRiskSettingsAction(account: AccountType, asset: Asset,
 
 const sizingSchema = riskSettingsSchema.pick({ riskPercent: true, drawdownLimit: true });
 
-// Botão "Adotar" da comparação: grava risco e proteção como nova regra a partir de hoje (contratos não mudam).
-export async function adoptSizingAction(
-  account: AccountType,
-  asset: Asset,
-  sizing: { riskPercent: number; drawdownLimit: number },
-): Promise<FormState> {
-  const userId = await requireUserId();
-  const target = targetSchema.safeParse({ account, asset });
-  const parsed = sizingSchema.safeParse(sizing);
-  if (!target.success) return { error: "Conta ou ativo inválido." };
-  if (!parsed.success) return { error: firstIssueMessage(parsed.error) };
-
-  const { account: accountType, asset: assetType } = target.data;
+// Grava risco e proteção como nova regra do ativo a partir de hoje (contratos não mudam). false = já era a regra.
+async function adoptSizing(userId: string, account: AccountType, asset: Asset, sizing: z.infer<typeof sizingSchema>) {
   const today = todayInSaoPaulo();
-  const current = await getRiskConfig(userId, accountType, assetType, today);
-  const next = { ...current, ...parsed.data };
-  const ruleWrites = await ruleVersionWrites(userId, accountType, current, next, today);
-  if (ruleWrites.length === 0) return { error: "Essa já é a regra atual." };
+  const current = await getRiskConfig(userId, account, asset, today);
+  const next = { ...current, ...sizing };
+  const ruleWrites = await ruleVersionWrites(userId, account, current, next, today);
+  if (ruleWrites.length === 0) return false;
 
   await saveSettingsWithHistory(
     userId,
-    accountType,
-    assetType,
+    account,
+    asset,
     {
       ...riskValues(next),
       bankrollStartDate: new Date(current.bankrollStartDate),
@@ -87,50 +79,78 @@ export async function adoptSizingAction(
     null,
     ruleWrites,
   );
+  return true;
+}
+
+// Botão "Adotar" da comparação: o risco e a proteção da linha passam a valer em cada ativo da banca.
+export async function adoptSizingAction(
+  account: AccountType,
+  assets: Asset[],
+  sizing: { riskPercent: number; drawdownLimit: number },
+): Promise<FormState> {
+  const userId = await requireUserId();
+  const target = unitSchema.safeParse({ account, assets });
+  const parsed = sizingSchema.safeParse(sizing);
+  if (!target.success) return { error: "Conta ou ativo inválido." };
+  if (!parsed.success) return { error: firstIssueMessage(parsed.error) };
+
+  const changed = [];
+  for (const asset of target.data.assets) {
+    if (await adoptSizing(userId, target.data.account, asset, parsed.data)) changed.push(asset);
+  }
+  if (changed.length === 0) return { error: "Essa já é a regra atual." };
 
   revalidatePath("/", "layout");
   return {
-    success: `${assetType}: risco de ${parsed.data.riskPercent}% e proteção ${parsed.data.drawdownLimit > 0 ? `de ${parsed.data.drawdownLimit}%` : "desligada"} a partir de hoje.`,
+    success: `${changed.join(" + ")}: risco de ${parsed.data.riskPercent}% e proteção ${parsed.data.drawdownLimit > 0 ? `de ${parsed.data.drawdownLimit}%` : "desligada"} a partir de hoje.`,
   };
 }
 
-// Desfaz a mudança de regra feita hoje (adoção ou configuração), voltando à versão anterior.
-export async function undoTodayRuleAction(account: AccountType, asset: Asset): Promise<FormState> {
+// Desfaz a mudança de regra feita hoje (adoção ou configuração) nos ativos da banca, voltando à versão anterior.
+export async function undoTodayRuleAction(account: AccountType, assets: Asset[]): Promise<FormState> {
   const userId = await requireUserId();
-  const target = targetSchema.safeParse({ account, asset });
+  const target = unitSchema.safeParse({ account, assets });
   if (!target.success) return { error: "Conta ou ativo inválido." };
 
-  const restored = await revertTodayRule(userId, target.data.account, target.data.asset, todayInSaoPaulo());
-  if (!restored) return { error: "Nenhuma mudança de regra hoje para desfazer." };
+  const today = todayInSaoPaulo();
+  const restored = [];
+  for (const asset of target.data.assets) {
+    const rule = await revertTodayRule(userId, target.data.account, asset, today);
+    if (rule) restored.push(`${asset} (risco de ${rule.riskPercent}%)`);
+  }
+  if (restored.length === 0) return { error: "Nenhuma mudança de regra hoje para desfazer." };
 
   revalidatePath("/", "layout");
-  return { success: `${target.data.asset}: regra anterior restaurada (risco de ${restored.riskPercent}%).` };
+  return { success: `Regra anterior restaurada: ${restored.join(", ")}.` };
 }
 
-// Botão do card de banca: aplica os contratos sugeridos (subir/reduzir) e inicia um novo nível.
-export async function applyContractsAction(account: AccountType, asset: Asset, contracts: number): Promise<FormState> {
+// Botão do card de banca: aplica os contratos sugeridos (subir/reduzir) em cada ativo e inicia um novo nível.
+export async function applyContractsAction(account: AccountType, assets: Asset[], contracts: number): Promise<FormState> {
   const userId = await requireUserId();
-  const target = targetSchema.safeParse({ account, asset });
+  const target = unitSchema.safeParse({ account, assets });
   const parsedContracts = z.number().int().min(1).safeParse(contracts);
   if (!target.success || !parsedContracts.success) return { error: "Nível inválido." };
 
-  const { account: accountType, asset: assetType } = target.data;
-  const { current, levelStartDate, change } = await prepareLevel(userId, accountType, assetType, parsedContracts.data, false);
-  if (!change) return { error: "O ativo já está com essa quantidade de contratos." };
-
-  await saveSettingsWithHistory(
-    userId,
-    accountType,
-    assetType,
-    {
-      ...riskValues(current),
-      contracts: parsedContracts.data,
-      bankrollStartDate: new Date(current.bankrollStartDate),
-      levelStartDate,
-    },
-    change,
-  );
+  const changed = [];
+  for (const asset of target.data.assets) {
+    const { current, levelStartDate, change } = await prepareLevel(userId, target.data.account, asset, parsedContracts.data, false);
+    if (!change) continue;
+    await saveSettingsWithHistory(
+      userId,
+      target.data.account,
+      asset,
+      {
+        ...riskValues(current),
+        contracts: parsedContracts.data,
+        bankrollStartDate: new Date(current.bankrollStartDate),
+        levelStartDate,
+      },
+      change,
+    );
+    changed.push(asset);
+  }
+  if (changed.length === 0) return { error: "Os ativos já estão com essa quantidade de contratos." };
 
   revalidatePath("/", "layout");
-  return { success: `${assetType}: agora operando com ${parsedContracts.data} contrato(s).` };
+  return { success: `${changed.join(" + ")}: agora operando com ${parsedContracts.data} contrato(s).` };
 }

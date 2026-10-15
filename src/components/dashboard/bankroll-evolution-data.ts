@@ -20,12 +20,14 @@ function chartEvents(data: RiskDashboardData): ChartEvent[] {
       detail: `Contratos: ${change.from} → ${change.to}`,
       color: COLORS.primary,
     })),
-    ...ruleChanges(data.ruleHistory, config.bankrollStartDate).map((change) => ({
-      day: change.day,
-      short: "Regra",
-      detail: `Regra: ${change.changes.join(", ")}`,
-      color: RULE_COLOR,
-    })),
+    ...data.assetRuleHistories.flatMap(({ asset, history }) =>
+      ruleChanges(history, config.bankrollStartDate).map((change) => ({
+        day: change.day,
+        short: "Regra",
+        detail: `Regra${data.assetRuleHistories.length > 1 ? ` ${asset}` : ""}: ${change.changes.join(", ")}`,
+        color: RULE_COLOR,
+      })),
+    ),
     ...data.protectionEvents.map((event) => ({
       day: event.day,
       short: event.on ? "Proteção" : "Fim prot.",

@@ -9,7 +9,8 @@ export type DeviationRule = Pick<RiskConfig, "asset" | "dailyGainTarget" | "dail
 type DeviationConfig = DeviationRule;
 
 // Regra versionada por data: limites do robô (desvios) e dimensionamento da banca.
-export type RiskRule = DeviationRule & Pick<RiskConfig, "riskPercent" | "marginPerContract" | "drawdownLimit" | "maxContracts">;
+export type RiskRule = DeviationRule & Pick<RiskConfig, "riskPercent" | "marginPerContract" | "drawdownLimit" | "maxContracts" | "increaseBuffer"
+>;
 export type DatedRule = RiskRule & { effectiveFrom: string };
 export type RuleResolver = (day: string) => RiskRule;
 type DeviationResolver = (day: string) => DeviationRule;

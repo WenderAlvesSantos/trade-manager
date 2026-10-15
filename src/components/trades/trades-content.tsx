@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { AddTradesDialog } from "@/components/shared/add-trades-dialog";
 import { FilterBar } from "@/components/shared/filter-bar";
-import { loadRiskOverlay } from "@/lib/pending-days";
+import { loadRiskOverlay } from "@/lib/trades-overlay";
 import { filtersToQueryString } from "@/lib/trade-filters";
 import { DAYS_PER_PAGE, loadTradePageData, paginateDays, type TradeSearchParams } from "@/lib/trade-page-data";
 import { DailyTradesTable } from "./daily-trades-table";
@@ -27,7 +27,8 @@ export async function TradesContent({ searchParams }: { searchParams: TradeSearc
       <DailyTradesTable
         filters={filters}
         days={daysPage.pageDays}
-        pendingDays={overlay?.pendingDays ?? []}
+        projection={overlay?.projection ?? null}
+        balances={overlay?.balances ?? {}}
         deviations={overlay?.deviations ?? {}}
         page={daysPage.page}
         pageSize={DAYS_PER_PAGE}

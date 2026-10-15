@@ -7,17 +7,16 @@ import dayjs, { type Dayjs } from "dayjs";
 import { saveRiskSettingsAction } from "@/actions/risk-settings";
 import type { AccountType } from "@/generated/prisma/enums";
 import { formatDate } from "@/lib/format";
-import type { RiskConfig } from "@/lib/risk-projection";
 import type { AccountRiskConfig } from "@/lib/risk-settings";
-import type { EquityPoint } from "@/lib/trade-aggregations";
 import type { RiskSettingsInput } from "@/lib/validations";
+import { previewBankroll, type PreviewBankrollSource } from "./preview-bankroll";
 import { FIELD_GROUPS, type FieldDef } from "./risk-settings-fields";
 import { RiskSettingsPreview } from "./risk-settings-preview";
 
-type RiskSettingsFormProps = {
+type RiskSettingsFormProps = PreviewBankrollSource & {
   account: AccountType;
   config: AccountRiskConfig;
-  bankrollCurve: EquityPoint[];
+  otherAssets: AccountRiskConfig[];
   businessDays: number;
 };
 
@@ -45,7 +44,8 @@ function BankrollStartField() {
   );
 }
 
-export function RiskSettingsForm({ account, config, bankrollCurve, businessDays }: RiskSettingsFormProps) {
+export function RiskSettingsForm(props: RiskSettingsFormProps) {
+  const { account, config, businessDays } = props;
   const { message } = App.useApp();
   const [form] = Form.useForm<RiskSettingsInput>();
   const values = Form.useWatch([], form);
@@ -61,7 +61,7 @@ export function RiskSettingsForm({ account, config, bankrollCurve, businessDays 
     });
   }
 
-  const preview: RiskConfig = { ...config, ...values };
+  const preview: AccountRiskConfig = { ...config, ...values };
 
   return (
     <Form form={form} layout="vertical" initialValues={config} onFinish={handleFinish} requiredMark={false}>
@@ -94,7 +94,7 @@ export function RiskSettingsForm({ account, config, bankrollCurve, businessDays 
             Salvar {config.asset}
           </Button>
         </div>
-        <RiskSettingsPreview config={preview} bankrollCurve={bankrollCurve} businessDays={businessDays} />
+        <RiskSettingsPreview config={preview} bankroll={previewBankroll(preview, props)} businessDays={businessDays} />
       </div>
     </Form>
   );

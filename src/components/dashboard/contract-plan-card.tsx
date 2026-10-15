@@ -18,6 +18,8 @@ import {
   scenarioOptions,
   type ScenarioKey,
 } from "./projection-scenarios";
+import { STOPS_MODE_TEXT, StopsModeSelect, useStopsMode } from "./stops-mode-select";
+import { contractsLabel, isCombined, marginLabel } from "./unit-labels";
 
 function forecastLabel(step: PlanStep) {
   if (step.reached) return <Tag color="green" className="m-0!">liberado</Tag>;
@@ -67,25 +69,29 @@ function SafetyNote({ data }: { data: RiskDashboardData }) {
 // Caminho da banca atual até o máximo de contratos configurado, com a previsão no cenário escolhido.
 export function ContractPlanCard({ data }: { data: RiskDashboardData }) {
   const [scenarioKey, setScenarioKey] = useState<ScenarioKey>(DEFAULT_SCENARIO);
+  const [stops, setStops] = useStopsMode(data);
   const { config, bankroll } = data;
+  const scenario = useMemo(() => forecastScenarioFor(data, scenarioKey), [data, scenarioKey]);
 
   const { plan, timelines } = useMemo(() => {
     const options = {
       start: data.nextMonth,
-      scenario: forecastScenarioFor(data, scenarioKey),
-      initialBankroll: bankroll.bankroll + pendingNetFor(data, scenarioKey),
+      scenario,
+      initialBankroll: bankroll.bankroll + pendingNetFor(data, scenarioKey, stops),
       drawdown: data.bankrollDrawdown,
+      assets: data.configs,
+      stops,
     };
     return {
       plan: contractPlan(config, bankroll.bankroll, options),
       timelines: riskTimelines(config, bankroll.bankroll, options),
     };
-  }, [data, config, bankroll.bankroll, scenarioKey]);
+  }, [data, config, bankroll.bankroll, scenario, scenarioKey, stops]);
 
   if (!bankroll.configured) return null;
   const title = (
     <span className="flex items-center gap-2">
-      <RiseOutlined /> Plano até {config.maxContracts > 0 ? `${config.maxContracts} contratos` : "o máximo"} · {config.asset}
+      <RiseOutlined /> Plano até {config.maxContracts > 0 ? `${config.maxContracts} contratos` : "o máximo"} · {data.label}
     </span>
   );
 
@@ -103,6 +109,9 @@ export function ContractPlanCard({ data }: { data: RiskDashboardData }) {
   }
 
   const target = plan.steps.at(-1)!;
+  const illiquid = data.configs
+    .filter((item) => exceedsLiquidity({ asset: item.asset, maxContracts: plan.target }))
+    .map((item) => item.asset);
   return (
     <Card
       title={title}
@@ -116,18 +125,21 @@ export function ContractPlanCard({ data }: { data: RiskDashboardData }) {
       }
     >
       <div className="flex flex-col gap-3">
+        {isCombined(data) && "lossDays" in scenario && <StopsModeSelect value={stops} onChange={setStops} />}
         <p className="text-sm">
-          Para operar <strong>{plan.target} contratos</strong> com risco de {config.riskPercent}% por dia de stop, a banca
+          Para operar <strong>{contractsLabel(data, plan.target)}</strong> com risco de {config.riskPercent}% por dia de stop, a banca
           precisa de <strong>{formatCurrency(target.requiredBankroll)}</strong> (dia de stop de −
           {formatCurrency(target.stopCost)}). Hoje a banca de {formatCurrency(bankroll.bankroll)} libera {plan.current}{" "}
           contrato(s).
         </p>
         <SafetyNote data={data} />
-        {exceedsLiquidity(config) && (
+        {illiquid.length > 0 && (
           <Alert
             type="warning"
             showIcon
-            title={`${plan.target} contratos passa da liquidez razoável do ${config.asset} (~${LIQUID_CONTRACTS[config.asset]} contratos).`}
+            title={`${plan.target} contratos passa da liquidez razoável de ${illiquid
+              .map((asset) => `${asset} (~${LIQUID_CONTRACTS[asset]})`)
+              .join(" e ")}.`}
             description="Acima disso, ordens a mercado do robô tendem a pegar vários preços do livro (slippage) e o resultado real fica pior que o projetado. Considere dividir as entradas ou parar num máximo menor."
           />
         )}
@@ -135,8 +147,10 @@ export function ContractPlanCard({ data }: { data: RiskDashboardData }) {
         <ContractPlanRisks rows={timelines} />
         <p className="text-xs text-white/45">
           A previsão repete o cenário escolhido mês a mês, reinvestindo o lucro e redimensionando os contratos pela banca
-          (com proteção de queda e o teto de {plan.target}). Margem da corretora considerada:{" "}
-          {config.marginPerContract > 0 ? `${formatCurrency(config.marginPerContract)} por contrato` : "sem teto"}.
+          (com proteção de queda e o teto de {plan.target}).{" "}
+          {isCombined(data) && "lossDays" in scenario && `${STOPS_MODE_TEXT[stops]} `}
+          Margem da corretora considerada:{" "}
+          {marginLabel(data)}.
           Slippage e custos fora da B3 não entram.
         </p>
       </div>

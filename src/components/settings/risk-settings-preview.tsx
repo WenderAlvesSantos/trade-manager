@@ -17,10 +17,15 @@ import { PreviewRow } from "./preview-row";
 
 const SCENARIOS = [2, 3, 4];
 
-type RiskSettingsPreviewProps = { config: RiskConfig; bankrollCurve: EquityPoint[]; businessDays: number };
+type RiskSettingsPreviewProps = {
+  config: RiskConfig;
+  // Ativos que dividem a banca (este, com os valores do formulário, e os outros operados) e a curva real dela.
+  bankroll: { configs: RiskConfig[]; curve: EquityPoint[] };
+  businessDays: number;
+};
 
 // Prévia ao vivo: recalcula a cada alteração do formulário, antes de salvar.
-export function RiskSettingsPreview({ config, bankrollCurve, businessDays }: RiskSettingsPreviewProps) {
+export function RiskSettingsPreview({ config, bankroll, businessDays }: RiskSettingsPreviewProps) {
   const valid = config.contracts > 0 && config.projectedGainDay > 0 && config.projectedLossDay > 0;
   if (!valid) return <Card title="Prévia" size="small">Preencha os campos para ver a projeção.</Card>;
 
@@ -50,9 +55,9 @@ export function RiskSettingsPreview({ config, bankrollCurve, businessDays }: Ris
         />
       ))}
       <Divider className="my-3!" titlePlacement="start" plain>
-        Banca
+        {bankroll.configs.length > 1 ? `Banca da conta (${bankroll.configs.map((item) => item.asset).join(" + ")})` : "Banca"}
       </Divider>
-      <BankrollPreview config={config} bankrollCurve={bankrollCurve} />
+      <BankrollPreview configs={bankroll.configs} bankrollCurve={bankroll.curve} />
     </Card>
   );
 }

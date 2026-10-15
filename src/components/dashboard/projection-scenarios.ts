@@ -1,5 +1,6 @@
 import type { AverageScenarioKey, RiskDashboardData } from "@/lib/risk-dashboard-data";
 import type { ForecastScenario } from "@/lib/risk-forecast";
+import { alternatePeriodNet, isAlternate, type StopsMode } from "@/lib/stops-mode";
 
 // Cenários selecionáveis nos cards de projeção: 2/3/4 dias de stop ou uma das médias reais.
 export type ScenarioKey = number | AverageScenarioKey;
@@ -25,9 +26,13 @@ export const findAverageScenario = (data: RiskDashboardData, key: ScenarioKey) =
 export const findStopScenario = (data: RiskDashboardData, key: ScenarioKey) =>
   data.scenarios.find((item) => item.lossDays === key) ?? data.scenarios[0];
 
-// Líquido projetado para os pregões que faltam no mês corrente.
-export function pendingNetFor(data: RiskDashboardData, key: ScenarioKey) {
-  return (findAverageScenario(data, key)?.projection ?? findStopScenario(data, key)).pendingNet;
+// Líquido projetado para os pregões que faltam no mês corrente (com os contratos atuais).
+export function pendingNetFor(data: RiskDashboardData, key: ScenarioKey, stops: StopsMode = "together") {
+  const average = findAverageScenario(data, key);
+  if (average) return average.projection.pendingNet;
+  const scenario = findStopScenario(data, key);
+  if (!isAlternate(stops, data.configs)) return scenario.pendingNet;
+  return alternatePeriodNet(data.configs, data.config.contracts, data.pendingDays.length, scenario.pendingLossDays);
 }
 
 // A média foi obtida com os contratos atuais; vira valor por contrato para escalar quando a banca muda os contratos.

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { bankrollAlert, stopAlert } from "./app-alert";
+import { bankrollAlert, nearIncreaseAlert, stopAlert } from "./app-alert";
 import { bankrollStatus } from "./bankroll-sizing";
 import { TEST_RISK_CONFIG as config } from "./risk-test-config";
 
-const context = { account: "REAL" as const, asset: "WIN" as const, contracts: 1 };
+const context = { account: "REAL" as const, label: "WIN", asset: "WIN" as const, contracts: 1, increaseBuffer: 0 };
 
 describe("stopAlert", () => {
   it("chave única por conta, ativo e dia", () => {
@@ -26,5 +26,18 @@ describe("bankrollAlert", () => {
     const alert = bankrollAlert({ ...context, contracts: 6 }, bankrollStatus({ ...config, contracts: 6 }, 1000));
     expect(alert?.severity).toBe("warning");
     expect(alert?.key).toBe("bankroll:REAL:WIN:6:1");
+  });
+});
+
+describe("nearIncreaseAlert", () => {
+  it("pré-avisa quando 1 dia de meta libera o próximo nível", () => {
+    const alert = nearIncreaseAlert(context, bankrollStatus(config, 1000), 1);
+    expect(alert?.key).toBe("bankroll-near:REAL:WIN:1:2");
+    expect(alert?.severity).toBe("info");
+  });
+
+  it("não pré-avisa com mais dias de meta ou quando já pode subir", () => {
+    expect(nearIncreaseAlert(context, bankrollStatus(config, 1000), 2)).toBeNull();
+    expect(nearIncreaseAlert(context, bankrollStatus(config, 1900), 1)).toBeNull();
   });
 });

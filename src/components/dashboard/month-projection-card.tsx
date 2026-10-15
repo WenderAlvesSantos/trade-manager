@@ -15,6 +15,7 @@ import {
   scenarioOptions,
   type ScenarioKey,
 } from "./projection-scenarios";
+import { contractsLabel, isCombined } from "./unit-labels";
 
 function Line({ label, value }: { label: string; value: number }) {
   return (
@@ -89,8 +90,8 @@ export function MonthProjectionCard({ data }: { data: RiskDashboardData }) {
       <Divider className="my-3!" />
       {lines}
       <p className="mt-3 text-xs text-white/45">
-        {data.businessDays} pregões no mês · {data.config.contracts} contrato(s) {data.config.asset} · ponto de equilíbrio: até{" "}
-        {data.breakEven} stops no mês.
+        {data.businessDays} pregões no mês · {contractsLabel(data, data.config.contracts)} · ponto de equilíbrio: até{" "}
+        {data.breakEven} stops no mês{isCombined(data) && " (cada dia de stop ou de meta conta nos dois ativos)"}.
       </p>
     </Card>
   );

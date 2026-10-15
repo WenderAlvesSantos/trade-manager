@@ -2,6 +2,7 @@ import type { DrawdownState } from "@/lib/bankroll-drawdown";
 import { bankrollLevel, contractsForBankroll, type BankrollLevel } from "@/lib/bankroll-sizing";
 import { forecastMonths, type ForecastScenario } from "@/lib/risk-forecast";
 import type { RiskConfig } from "@/lib/risk-projection";
+import type { StopsMode } from "@/lib/stops-mode";
 
 // Horizonte da previsão de cada etapa (meses).
 export const PLAN_HORIZON_MONTHS = 60;
@@ -26,6 +27,9 @@ type PlanOptions = {
   // Banca projetada no início do primeiro mês e pico/proteção atuais.
   initialBankroll: number;
   drawdown?: DrawdownState;
+  // Ativos que dividem a banca e como os stops caem entre eles (ver forecastMonths).
+  assets?: RiskConfig[];
+  stops?: StopsMode;
 };
 
 export function planMilestones(current: number, target: number) {
@@ -46,6 +50,8 @@ export function contractPlan(config: RiskConfig, bankroll: number, options: Plan
     scenario: options.scenario,
     initialBankroll: options.initialBankroll,
     drawdown: options.drawdown,
+    assets: options.assets,
+    stops: options.stops,
   });
 
   const steps = planMilestones(Math.min(current, target), target).map((contracts): PlanStep => {

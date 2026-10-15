@@ -3,6 +3,7 @@ import type { DatedRule, RiskRule } from "@/lib/day-deviation";
 type RuleField = Exclude<keyof RiskRule, "asset">;
 
 export const formatMaxContracts = (value: number) => (value > 0 ? `${value} contr.` : "sem limite");
+export const formatIncreaseBuffer = (value: number) => (value > 0 ? `${value} stop(s)` : "sem folga");
 
 const FIELDS: { key: RuleField; label: string; format: (value: number) => string }[] = [
   { key: "dailyStopLimit", label: "stop", format: (value) => `${value} pts` },
@@ -12,6 +13,7 @@ const FIELDS: { key: RuleField; label: string; format: (value: number) => string
   { key: "marginPerContract", label: "margem", format: (value) => (value > 0 ? `R$ ${value}` : "sem teto") },
   { key: "drawdownLimit", label: "proteção", format: (value) => (value > 0 ? `${value}%` : "desligada") },
   { key: "maxContracts", label: "máximo", format: formatMaxContracts },
+  { key: "increaseBuffer", label: "folga", format: formatIncreaseBuffer },
 ];
 
 export type RuleChange = { day: string; changes: string[] };

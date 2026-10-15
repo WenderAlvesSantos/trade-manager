@@ -12,9 +12,14 @@ const data = {
   ],
   simulation: { points: [{ day: "2026-10-01", bankroll: 1000, peak: 1000, contracts: 1 }] },
   contractChanges: [{ day: "2026-10-04", from: 1, to: 2 }],
-  ruleHistory: [
-    { ...config, effectiveFrom: "2000-01-01" },
-    { ...config, effectiveFrom: "2026-10-04", riskPercent: 15 },
+  assetRuleHistories: [
+    {
+      asset: config.asset,
+      history: [
+        { ...config, effectiveFrom: "2000-01-01" },
+        { ...config, effectiveFrom: "2026-10-04", riskPercent: 15 },
+      ],
+    },
   ],
   protectionEvents: [],
 } as unknown as RiskDashboardData;
