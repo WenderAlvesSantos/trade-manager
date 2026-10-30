@@ -1,8 +1,8 @@
 "use server";
 
-import bcrypt from "bcryptjs";
 import { AuthError } from "next-auth";
 import { signIn, signOut } from "@/auth";
+import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import {
   credentialsSchema,
@@ -10,8 +10,6 @@ import {
   registerSchema,
   type FormState,
 } from "@/lib/validations";
-
-const BCRYPT_ROUNDS = 10;
 
 async function signInWithCredentials(email: string, password: string) {
   try {
@@ -45,7 +43,7 @@ export async function registerAction(
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) return { error: "Já existe uma conta com este e-mail." };
 
-  const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  const hashedPassword = await hashPassword(password);
   await prisma.user.create({ data: { email, password: hashedPassword } });
 
   return signInWithCredentials(email, password);
