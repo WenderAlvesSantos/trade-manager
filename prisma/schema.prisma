@@ -47,8 +47,11 @@ model Trade {
   points      Float
   grossResult Float
   fees        Float
+  // Id do trade na origem (Megan); null = lançado à mão. Impede lançar o mesmo trade duas vezes.
+  externalId  String?
   createdAt   DateTime    @default(now())
 
+  @@unique([userId, externalId])
   @@index([userId, date])
   @@index([userId, accountType, date])
 }

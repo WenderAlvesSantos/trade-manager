@@ -6,7 +6,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/session";
 import { pushNewAlerts } from "@/lib/alert-push";
-import { calculateTradeResult } from "@/lib/trade-calculations";
+import { buildTradeData } from "@/lib/trade-calculations";
 import {
   firstIssueMessage,
   tradeSchema,
@@ -22,17 +22,6 @@ const tradeBatchSchema = z
 
 export type TradeRowInput = Record<keyof z.input<typeof tradeSchema>, string>;
 
-function toTradeData({ date, accountType, asset, contracts, points }: z.output<typeof tradeSchema>) {
-  return {
-    date: new Date(date),
-    accountType,
-    asset,
-    contracts,
-    points,
-    ...calculateTradeResult({ asset, contracts, points }),
-  };
-}
-
 function batchIssueMessage(error: z.ZodError) {
   const issue = error.issues[0];
   const row = typeof issue?.path[0] === "number" ? issue.path[0] + 1 : null;
@@ -46,7 +35,7 @@ export async function createTradesAction(rows: TradeRowInput[]): Promise<FormSta
   if (!parsed.success) return { error: batchIssueMessage(parsed.error) };
 
   const { count } = await prisma.trade.createMany({
-    data: parsed.data.map((trade) => ({ ...toTradeData(trade), userId })),
+    data: parsed.data.map((trade) => ({ ...buildTradeData(trade), userId })),
   });
   revalidatePath("/", "layout");
   after(() => pushNewAlerts(userId));
@@ -64,7 +53,7 @@ export async function updateTradeAction(
 
   const { count } = await prisma.trade.updateMany({
     where: { id: tradeId, userId },
-    data: toTradeData(parsed.data),
+    data: buildTradeData(parsed.data),
   });
   if (count === 0) return { error: "Trade não encontrado." };
 

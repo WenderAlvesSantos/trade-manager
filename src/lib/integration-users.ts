@@ -17,6 +17,16 @@ export function isIntegrationAuthorized(authorization: string | null, secret: st
   return timingSafeEqual(digest(authorization), digest(`Bearer ${secret}`));
 }
 
+/** null = autorizado; senão a resposta de erro pronta (integração desligada ou chave errada). */
+export function integrationAuthError(request: Request): Response | null {
+  const secret = process.env.MEGAN_INTEGRATION_KEY?.trim();
+  if (!secret) return Response.json({ error: "Integração não configurada." }, { status: 503 });
+  if (!isIntegrationAuthorized(request.headers.get("authorization"), secret)) {
+    return Response.json({ error: "Não autorizado." }, { status: 401 });
+  }
+  return null;
+}
+
 export async function provisionUser(email: string, createUser: CreateUser): Promise<ProvisionResult> {
   const password = generatePassword();
   const created = await createUser(email, await hashPassword(password));

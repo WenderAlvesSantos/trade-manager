@@ -1,4 +1,4 @@
-import type { Asset } from "@/generated/prisma/enums";
+import type { AccountType, Asset } from "@/generated/prisma/enums";
 
 export const POINT_VALUE: Record<Asset, number> = {
   WIN: 0.2,
@@ -26,6 +26,20 @@ export function calculateTradeResult({ asset, contracts, points }: TradeInput) {
   return {
     grossResult: roundToCents(points * contracts * POINT_VALUE[asset]),
     fees: roundToCents(contracts * FEE_PER_CONTRACT[asset]),
+  };
+}
+
+export type TradeFields = TradeInput & { date: string; accountType: AccountType };
+
+/** Linha pronta para gravar: data como Date + resultado bruto e custo calculados. */
+export function buildTradeData({ date, accountType, asset, contracts, points }: TradeFields) {
+  return {
+    date: new Date(date),
+    accountType,
+    asset,
+    contracts,
+    points,
+    ...calculateTradeResult({ asset, contracts, points }),
   };
 }
 
