@@ -1,6 +1,8 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { AccountType, Asset, LevelChangeReason } from "@/generated/prisma/enums";
+import { todayInSaoPaulo } from "@/lib/b3-calendar";
 import { prisma } from "@/lib/prisma";
+import { getRiskConfig } from "@/lib/risk-settings";
 import { buildDaySummaries } from "@/lib/trade-aggregations";
 import { roundToCents } from "@/lib/trade-calculations";
 import { getDailyAssetTotals } from "@/lib/trades";
@@ -21,6 +23,24 @@ export type LevelChange = {
 
 export const reasonFor = (from: number, to: number, manual: boolean): LevelChangeReason =>
   manual ? "MANUAL" : to > from ? "SUBIDA" : "REBAIXAMENTO";
+
+// Mudar a quantidade de contratos encerra o nível atual (registrado no histórico) e inicia outro hoje.
+export async function prepareLevel(userId: string, account: AccountType, asset: Asset, contracts: number, manual: boolean) {
+  const today = todayInSaoPaulo();
+  const current = await getRiskConfig(userId, account, asset, today);
+  if (current.contracts === contracts) {
+    return { today, current, levelStartDate: new Date(current.levelStartDate), change: null };
+  }
+
+  const change: LevelChange = {
+    date: today,
+    fromContracts: current.contracts,
+    toContracts: contracts,
+    reason: reasonFor(current.contracts, contracts, manual),
+    previousLevelStart: current.levelStartDate,
+  };
+  return { today, current, levelStartDate: new Date(today), change };
+}
 
 type SettingsData = Omit<Parameters<typeof prisma.riskSettings.create>[0]["data"], "userId" | "accountType" | "asset" | "user">;
 

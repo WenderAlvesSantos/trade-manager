@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { AccountType, Asset } from "@/generated/prisma/enums";
 import { todayInSaoPaulo } from "@/lib/b3-calendar";
-import { reasonFor, saveSettingsWithHistory, type LevelChange } from "@/lib/level-history";
+import { prepareLevel, saveSettingsWithHistory } from "@/lib/level-history";
 import { revertTodayRule, ruleVersionWrites } from "@/lib/risk-rules";
 import { getRiskConfig, riskValues } from "@/lib/risk-settings";
 import { requireUserId } from "@/lib/session";
@@ -14,24 +14,6 @@ const accountSchema = z.enum(["SIMULADOR", "REAL"]);
 const targetSchema = z.object({ account: accountSchema, asset: assetSchema });
 // Banca da conta: as ações do Dashboard valem para todos os ativos que dividem a banca.
 const unitSchema = z.object({ account: accountSchema, assets: z.array(assetSchema).min(1) });
-
-// Mudar a quantidade de contratos encerra o nível atual (registrado no histórico) e inicia outro hoje.
-async function prepareLevel(userId: string, account: AccountType, asset: Asset, contracts: number, manual: boolean) {
-  const today = todayInSaoPaulo();
-  const current = await getRiskConfig(userId, account, asset, today);
-  if (current.contracts === contracts) {
-    return { today, current, levelStartDate: new Date(current.levelStartDate), change: null };
-  }
-
-  const change: LevelChange = {
-    date: today,
-    fromContracts: current.contracts,
-    toContracts: contracts,
-    reason: reasonFor(current.contracts, contracts, manual),
-    previousLevelStart: current.levelStartDate,
-  };
-  return { today, current, levelStartDate: new Date(today), change };
-}
 
 export async function saveRiskSettingsAction(account: AccountType, asset: Asset, input: RiskSettingsInput): Promise<FormState> {
   const userId = await requireUserId();
