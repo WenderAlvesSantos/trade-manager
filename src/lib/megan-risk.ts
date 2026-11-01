@@ -19,7 +19,8 @@ export const MEGAN_WIN_RISK: RiskValues = {
   projectedLossDay: 300,
   avgTradesPerDay: 6,
   deviationTolerance: 50,
-  initialBankroll: 0,
+  // Banca padrão de quem começa com a Megan; a Megan pede para confirmar (ou trocar) no primeiro uso.
+  initialBankroll: 1000,
   marginPerContract: 155,
   riskPercent: 10,
   drawdownLimit: 25,
@@ -29,8 +30,13 @@ export const MEGAN_WIN_RISK: RiskValues = {
 
 export const MEGAN_ACCOUNTS: AccountType[] = ["REAL", "SIMULADOR"];
 
-/** RiskSettings do WIN numa conta com a configuração da Megan (banca 0 = ainda não informada). */
-export function meganRiskRow(userId: string, accountType: AccountType, today: string, initialBankroll = 0) {
+/** RiskSettings do WIN numa conta com a configuração da Megan (banca padrão, ainda não confirmada). */
+export function meganRiskRow(
+  userId: string,
+  accountType: AccountType,
+  today: string,
+  initialBankroll = MEGAN_WIN_RISK.initialBankroll,
+) {
   const day = new Date(today);
   return {
     ...MEGAN_WIN_RISK,
@@ -40,6 +46,22 @@ export function meganRiskRow(userId: string, accountType: AccountType, today: st
     asset: "WIN" as const,
     levelStartDate: day,
     bankrollStartDate: day,
+  };
+}
+
+/**
+ * Aplicar a configuração da Megan numa conta que já tinha WIN: as regras passam a ser as da Megan,
+ * mas os contratos e a banca do usuário ficam. Sem banca (0), entra a padrão — e volta a pedir confirmação.
+ */
+export function meganValuesOver(current: Pick<RiskValues, "contracts" | "initialBankroll">) {
+  const semBanca = !(current.initialBankroll > 0);
+  return {
+    values: {
+      ...MEGAN_WIN_RISK,
+      contracts: current.contracts,
+      initialBankroll: semBanca ? MEGAN_WIN_RISK.initialBankroll : current.initialBankroll,
+    } satisfies RiskValues,
+    resetBankroll: semBanca,
   };
 }
 
@@ -54,12 +76,16 @@ export const bankrollSyncSchema = z.object({
   initialBankroll: z.number("Banca inválida.").positive("Informe a banca inicial.").max(100_000_000).optional(),
   // Contratos com que a Megan iniciou no ao vivo: vira o nível atual (histórico de subida/redução).
   contracts: z.number("Contratos inválidos.").int("Contratos inválidos.").min(1).max(100_000).optional(),
+  // Primeiro uso: o usuário confirma a banca inicial que já está gravada (padrão R$ 1.000).
+  confirmBankroll: z.literal(true).optional(),
 });
 
 export const MEGAN_BATCH_MAX = 50;
 
 export const meganDefaultsBatchSchema = z.object({
   emails: z.array(integrationUserSchema.shape.email).min(1).max(MEGAN_BATCH_MAX),
+  // true = admin, cliente a cliente: aplica também sobre a configuração WIN que já existe
+  sobrescrever: z.boolean().optional(),
 });
 
 export type MeganDefaultsResult = { aplicados: string[]; jaTinham: string[]; semConta: string[] };
@@ -85,6 +111,8 @@ export async function applyMeganDefaults(
 export type MeganBankrollReply = {
   status: "ok";
   configured: boolean;
+  bankrollConfirmed: boolean;
+  initialBankroll: number;
   bankroll: number;
   contracts: number;
   suggestedContracts: number;
@@ -94,10 +122,16 @@ export type MeganBankrollReply = {
 };
 
 /** Resumo que a Megan mostra: banca atual e quantos contratos o gerenciamento recomenda. */
-export function meganBankrollReply(config: Pick<RiskConfig, "contracts" | "maxContracts">, status: BankrollStatus): MeganBankrollReply {
+export function meganBankrollReply(
+  config: Pick<RiskConfig, "contracts" | "maxContracts" | "initialBankroll">,
+  status: BankrollStatus,
+  bankrollConfirmed: boolean,
+): MeganBankrollReply {
   return {
     status: "ok",
     configured: status.configured,
+    bankrollConfirmed: status.configured && bankrollConfirmed,
+    initialBankroll: config.initialBankroll,
     bankroll: status.bankroll,
     contracts: config.contracts,
     suggestedContracts: status.configured ? status.suggestedContracts : 0,

@@ -1,9 +1,10 @@
 import type { AccountType } from "@/generated/prisma/enums";
 import { loadBankrollStatus } from "@/lib/bankroll";
 import { prepareLevel, saveSettingsWithHistory } from "@/lib/level-history";
-import { meganBankrollReply, meganRiskRows } from "@/lib/megan-risk";
+import { MEGAN_ACCOUNTS, meganBankrollReply, meganRiskRows, meganValuesOver } from "@/lib/megan-risk";
 import { prisma } from "@/lib/prisma";
-import { activeConfigs, getAccountRiskConfigs, riskValues } from "@/lib/risk-settings";
+import { ruleVersionWrites } from "@/lib/risk-rules";
+import { activeConfigs, getAccountRiskConfigs, getRiskConfig, riskValues } from "@/lib/risk-settings";
 import { sizingUnit } from "@/lib/sizing-unit";
 
 /** Cria a configuração da Megan no WIN das contas que ainda não têm; nunca altera uma existente. Devolve quantas criou. */
@@ -13,21 +14,62 @@ export async function ensureMeganSettings(userId: string, today: string, account
   return count;
 }
 
-export type MeganChanges = { initialBankroll?: number; contracts?: number };
+/**
+ * Admin, um cliente: aplica a configuração da Megan no WIN do Real e do Simulador, inclusive sobre a existente
+ * (regras viram as da Megan, registradas no histórico de regras; contratos e banca ficam). Devolve quantas contas aplicou.
+ */
+export async function applyMeganSettings(userId: string, today: string) {
+  for (const account of MEGAN_ACCOUNTS) {
+    const current = await getRiskConfig(userId, account, "WIN", today);
+    if (!current.saved) {
+      await ensureMeganSettings(userId, today, [account]);
+      continue;
+    }
+    const { values, resetBankroll } = meganValuesOver(current);
+    const ruleWrites = await ruleVersionWrites(userId, account, current, { ...values, asset: "WIN" }, today);
+    await saveSettingsWithHistory(
+      userId,
+      account,
+      "WIN",
+      {
+        ...values,
+        levelStartDate: new Date(current.levelStartDate),
+        bankrollStartDate: resetBankroll ? new Date(today) : new Date(current.bankrollStartDate),
+        ...(resetBankroll ? { bankrollConfirmedAt: null } : {}),
+      },
+      null,
+      ruleWrites,
+    );
+  }
+  return MEGAN_ACCOUNTS.length;
+}
 
-/** Banca inicial (vale a partir de hoje) e/ou contratos operados (novo nível no histórico) do WIN na conta. */
+export type MeganChanges = { initialBankroll?: number; contracts?: number; confirmBankroll?: boolean };
+
+const winKey = (userId: string, account: AccountType) => ({ userId_accountType_asset: { userId, accountType: account, asset: "WIN" as const } });
+
+/**
+ * Banca inicial (vale a partir de hoje, já confirmada), confirmação da banca padrão (valor e data de início
+ * não mudam) e/ou contratos operados (novo nível no histórico) do WIN na conta.
+ */
 export async function applyMeganChanges(userId: string, account: AccountType, changes: MeganChanges, today: string) {
-  if (changes.initialBankroll === undefined && changes.contracts === undefined) return false;
+  const { initialBankroll, contracts, confirmBankroll } = changes;
+  if (initialBankroll === undefined && contracts === undefined && !confirmBankroll) return false;
   await ensureMeganSettings(userId, today, [account]);
 
-  if (changes.initialBankroll !== undefined) {
+  if (initialBankroll !== undefined) {
     await prisma.riskSettings.update({
-      where: { userId_accountType_asset: { userId, accountType: account, asset: "WIN" } },
-      data: { initialBankroll: changes.initialBankroll, bankrollStartDate: new Date(today) },
+      where: winKey(userId, account),
+      data: { initialBankroll, bankrollStartDate: new Date(today), bankrollConfirmedAt: new Date() },
+    });
+  } else if (confirmBankroll) {
+    await prisma.riskSettings.updateMany({
+      where: { userId, accountType: account, asset: "WIN", bankrollConfirmedAt: null },
+      data: { bankrollConfirmedAt: new Date() },
     });
   }
-  if (changes.contracts !== undefined) {
-    const { current, levelStartDate, change } = await prepareLevel(userId, account, "WIN", changes.contracts, false);
+  if (contracts !== undefined) {
+    const { current, levelStartDate, change } = await prepareLevel(userId, account, "WIN", contracts, false);
     if (change) {
       await saveSettingsWithHistory(
         userId,
@@ -35,7 +77,7 @@ export async function applyMeganChanges(userId: string, account: AccountType, ch
         "WIN",
         {
           ...riskValues(current),
-          contracts: changes.contracts,
+          contracts,
           bankrollStartDate: new Date(current.bankrollStartDate),
           levelStartDate,
         },
@@ -51,6 +93,9 @@ export async function meganBankroll(userId: string, account: AccountType, today:
   const configs = activeConfigs(await getAccountRiskConfigs(userId, account, today));
   if (configs.length === 0) return null;
   const unit = sizingUnit(configs);
-  const { status } = await loadBankrollStatus(userId, account, unit);
-  return meganBankrollReply(unit.config, status);
+  const [{ status }, win] = await Promise.all([
+    loadBankrollStatus(userId, account, unit),
+    prisma.riskSettings.findUnique({ where: winKey(userId, account), select: { bankrollConfirmedAt: true } }),
+  ]);
+  return meganBankrollReply(unit.config, status, Boolean(win?.bankrollConfirmedAt));
 }

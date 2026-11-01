@@ -30,7 +30,8 @@ export async function saveRiskSettingsAction(account: AccountType, asset: Asset,
     userId,
     accountType,
     assetType,
-    { ...values, bankrollStartDate: new Date(bankrollStartDate), levelStartDate },
+    // Salvar pela tela de configuração conta como banca confirmada (a Megan não pede de novo).
+    { ...values, bankrollStartDate: new Date(bankrollStartDate), levelStartDate, bankrollConfirmedAt: new Date() },
     change,
     ruleWrites,
   );

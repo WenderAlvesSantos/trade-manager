@@ -75,6 +75,7 @@ model RiskSettings {
   deviationTolerance Int         @default(50) // pts além da meta/stop do robô para alertar desvio
   initialBankroll    Float       @default(0) // banca do ativo na data de início (R$)
   bankrollStartDate  DateTime    @db.Date // a banca atual soma o líquido real desde esta data
+  bankrollConfirmedAt DateTime? // banca inicial confirmada pelo usuário (null = padrão da Megan ainda não confirmado)
   marginPerContract  Float       @default(0) // margem exigida por contrato (R$); 0 = sem teto
   riskPercent        Float       @default(10) // % máximo da banca perdido num dia de stop
   drawdownLimit      Float       @default(20) // % de queda desde o pico que ativa a proteção; 0 = desligado
