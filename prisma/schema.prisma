@@ -22,6 +22,12 @@ model User {
   email             String                @unique
   password          String
   createdAt         DateTime              @default(now())
+  // Última consulta da licença no site da Megan (mesma regra do bot); revalidada a cada 10 min.
+  licenseOk         Boolean               @default(false)
+  licensePlan       String?
+  licenseUntil      DateTime?
+  licenseMessage    String?
+  licenseCheckedAt  DateTime?
   trades            Trade[]
   riskSettings      RiskSettings[]
   levelChanges      ContractLevelChange[]

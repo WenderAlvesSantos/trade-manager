@@ -5,13 +5,6 @@ export const credentialsSchema = z.object({
   password: z.string().min(6, "A senha deve ter pelo menos 6 caracteres."),
 });
 
-export const registerSchema = credentialsSchema
-  .extend({ confirmPassword: z.string() })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "As senhas não conferem.",
-    path: ["confirmPassword"],
-  });
-
 export const tradeSchema = z.object({
   date: z.iso.date("Informe uma data válida."),
   accountType: z.enum(["SIMULADOR", "REAL"], "Selecione o tipo de conta."),

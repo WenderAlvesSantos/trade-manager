@@ -1,6 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 
-const PUBLIC_ROUTES = ["/login", "/register"];
+const PUBLIC_ROUTES = ["/login"];
 
 // Config leve (sem Prisma/bcrypt) para ser usada também pelo proxy.ts.
 export const authConfig = {
